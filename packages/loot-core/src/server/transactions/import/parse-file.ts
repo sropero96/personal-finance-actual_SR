@@ -8,6 +8,7 @@ import { looselyParseAmount } from '../../../shared/util';
 import { ofx2json } from './ofx2json';
 import { qif2json } from './qif2json';
 import { xmlCAMT2json } from './xmlcamt2json';
+import { parsePDFFromBuffer } from './spanish-pdf-parser';
 
 /**
  * Parse OFX amount strings to numbers.
@@ -65,6 +66,7 @@ export type ParseFileOptions = {
   fallbackMissingPayeeToMemo?: boolean;
   skipLines?: number;
   importNotes?: boolean;
+  bankType?: 'santander' | 'bbva' | 'caixabank' | 'sabadell' | 'unknown';
 };
 
 export async function parseFile(
@@ -74,8 +76,14 @@ export async function parseFile(
   const errors = Array<ParseError>();
   const m = filepath.match(/\.[^.]*$/);
 
+  // Add debugging logs
+  logger.info('🔍 Parse File called!');
+  logger.info('📁 File path: ' + filepath);
+  logger.info('⚙️  Options: ' + JSON.stringify(options, null, 2));
+
   if (m) {
     const ext = m[0];
+    logger.info('📄 File extension detected: ' + ext);
 
     switch (ext.toLowerCase()) {
       case '.qif':
@@ -88,6 +96,14 @@ export async function parseFile(
         return parseOFX(filepath, options);
       case '.xml':
         return parseCAMT(filepath, options);
+      case '.pdf':
+        logger.info('🎯 PDF detected! Reading file and calling Spanish PDF parser...');
+        const pdfContents = await fs.readFile(filepath, null); // Read as buffer
+        const pdfBuffer = Buffer.isBuffer(pdfContents) ? pdfContents : Buffer.from(pdfContents);
+        logger.info('📊 PDF file size: ' + pdfBuffer.length + ' bytes');
+        logger.info('📋 PDF buffer type: ' + typeof pdfBuffer);
+        logger.info('🔍 Is Buffer: ' + Buffer.isBuffer(pdfBuffer));
+        return parsePDFFromBuffer(pdfBuffer, options);
       default:
     }
   }

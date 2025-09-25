@@ -212,6 +212,9 @@ export function ImportTransactionsModal({
   const [fallbackMissingPayeeToMemo, setFallbackMissingPayeeToMemo] = useState(
     String(prefs[`ofx-fallback-missing-payee-${accountId}`]) !== 'false',
   );
+  const [bankType, setBankType] = useState<'santander' | 'bbva' | 'caixabank' | 'sabadell' | 'unknown'>(
+    (prefs[`pdf-bank-type-${accountId}`] as any) || 'santander',
+  );
 
   const [parseDateFormat, setParseDateFormat] = useState<DateFormat | null>(
     null,
@@ -351,7 +354,9 @@ export function ImportTransactionsModal({
 
   const parse = useCallback(
     async (filename: string, options: ParseFileOptions) => {
-      setLoadingState('parsing');
+      // Set specific loading state for PDF files
+      const isPdfFile = filename.toLowerCase().endsWith('.pdf');
+      setLoadingState(isPdfFile ? 'parsing-pdf' : 'parsing');
 
       const filetype = getFileType(filename);
       setFilename(filename);
@@ -380,10 +385,13 @@ export function ImportTransactionsModal({
       setError(null);
 
       /// Do fine grained reporting between the old and new OFX importers.
-      if (errors.length > 0) {
+      // Filter out DEBUG messages (temporary development messages)
+      const realErrors = errors.filter(error => !error.message.startsWith('DEBUG:'));
+      
+      if (realErrors.length > 0) {
         setError({
           parsed: true,
-          message: errors[0].message || 'Internal error',
+          message: realErrors[0].message || 'Internal error',
         });
       } else {
         let flipAmount = false;
@@ -512,7 +520,7 @@ export function ImportTransactionsModal({
       filters: [
         {
           name: 'Financial Files',
-          extensions: ['qif', 'ofx', 'qfx', 'csv', 'tsv', 'xml'],
+          extensions: ['qif', 'ofx', 'qfx', 'csv', 'tsv', 'xml', 'pdf'],
         },
       ],
     });
@@ -680,6 +688,13 @@ export function ImportTransactionsModal({
       });
     }
 
+    if (isPdfFile(filetype)) {
+      savePrefs({
+        [`pdf-bank-type-${accountId}`]: bankType,
+        [`import-notes-${accountId}-${filetype}`]: String(importNotes),
+      });
+    }
+
     if (filetype === 'csv') {
       savePrefs({
         [`csv-mappings-${accountId}`]: JSON.stringify(fieldMappings),
@@ -783,7 +798,7 @@ export function ImportTransactionsModal({
   return (
     <Modal
       name="import-transactions"
-      isLoading={loadingState === 'parsing'}
+      isLoading={loadingState === 'parsing' || loadingState === 'parsing-pdf'}
       containerProps={{ style: { width: 800 } }}
     >
       {({ state: { close } }) => (
@@ -802,6 +817,24 @@ export function ImportTransactionsModal({
                   <Trans>Error:</Trans>
                 </strong>{' '}
                 {error.message}
+              </Text>
+            </View>
+          )}
+          {loadingState === 'parsing-pdf' && (
+            <View style={{ alignItems: 'center', marginBottom: 15, padding: 20 }}>
+              <Text style={{ 
+                color: theme.pageTextPositive, 
+                fontSize: 14,
+                marginBottom: 10 
+              }}>
+                <strong>🔍 Procesando PDF bancario español...</strong>
+              </Text>
+              <Text style={{ 
+                color: theme.pageTextSubdued, 
+                fontSize: 12, 
+                textAlign: 'center' 
+              }}>
+                Extrayendo transacciones del archivo PDF. Esto puede tomar unos segundos.
               </Text>
             </View>
           )}
@@ -890,6 +923,38 @@ export function ImportTransactionsModal({
                 inOutMode={inOutMode}
                 hasHeaderRow={hasHeaderRow}
               />
+            </View>
+          )}
+
+          {isPdfFile(filetype) && (
+            <View style={{ marginTop: 10 }}>
+              <Text style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                <Trans>Spanish Bank Type</Trans>
+              </Text>
+              <Select
+                options={[
+                  ['santander', 'Banco Santander'],
+                  ['bbva', 'BBVA'],
+                  ['caixabank', 'CaixaBank'],
+                  ['sabadell', 'Banco Sabadell'],
+                  ['unknown', 'Otro banco español']
+                ]}
+                value={bankType}
+                onChange={(value: string) => {
+                  const newBankType = value as typeof bankType;
+                  setBankType(newBankType);
+                  parse(
+                    filename,
+                    getParseOptions(filetype, {
+                      bankType: newBankType,
+                      importNotes,
+                    }),
+                  );
+                }}
+              />
+              <Text style={{ marginTop: 5, fontSize: 12, color: theme.pageTextSubdued, fontStyle: 'italic' }}>
+                <Trans>Select your Spanish bank to optimize transaction parsing</Trans>
+              </Text>
             </View>
           )}
 
@@ -1177,6 +1242,10 @@ function getParseOptions(fileType: string, options: ParseFileOptions = {}) {
     const { importNotes } = options;
     return { importNotes };
   }
+  if (isPdfFile(fileType)) {
+    const { bankType, importNotes } = options;
+    return { bankType, importNotes };
+  }
   const { importNotes } = options;
   return { importNotes };
 }
@@ -1187,4 +1256,8 @@ function isOfxFile(fileType: string) {
 
 function isCamtFile(fileType: string) {
   return fileType === 'xml';
+}
+
+function isPdfFile(fileType: string) {
+  return fileType === 'pdf';
 }

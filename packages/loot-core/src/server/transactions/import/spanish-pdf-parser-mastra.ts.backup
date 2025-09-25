@@ -1,0 +1,515 @@
+// @ts-strict-ignore
+import * as fs from '../../../platform/server/fs';
+import { logger } from '../../../platform/server/log';
+import { looselyParseAmount } from '../../../shared/util';
+
+// Use native fetch (Node 18+)
+const fetchApi = fetch;
+
+type ParseError = { message: string; internal: string };
+type ParseFileResult = {
+  errors: ParseError[];
+  transactions?: {
+    amount: number;
+    date: string;
+    payee_name: string;
+    imported_payee: string;
+    notes: string;
+  }[];
+};
+
+type ParseFileOptions = {
+  bankType?: 'santander' | 'bbva' | 'caixabank' | 'sabadell' | 'unknown';
+  importNotes?: boolean;
+};
+
+// MASTRA-powered Spanish PDF Parser
+// This integrates our proven MASTRA AI agent with Actual Budget
+
+/**
+ * Calls the MASTRA AI agent to process Spanish banking PDFs
+ */
+async function callMastraAgent(pdfBase64: string, bankType: string = 'santander') {
+  try {
+    logger.info('🤖 Calling MASTRA AI agent for PDF processing...');
+    
+    // Call MASTRA API endpoint
+    const response = await fetchApi('http://localhost:4111/api/agents/pdf-parser-agent/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input: `Process this Spanish banking PDF. Extract ALL transactions from the entire document. Bank type: ${bankType}`,
+        context: {
+          pdfBase64,
+          bankType,
+          requireCompleteProcessing: true
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`MASTRA API error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    logger.info('✅ MASTRA agent response received');
+    
+    return result;
+  } catch (error) {
+    logger.error('❌ MASTRA agent call failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Parses MASTRA agent output and converts it to Actual Budget format
+ */
+async function parseMastraOutput(mastraOutput: any, importNotes: boolean = true) {
+  try {
+    logger.info('🔄 Parsing MASTRA output...');
+    
+    // MASTRA should return structured transaction data
+    let transactionData = mastraOutput;
+    
+    // If the output is a string (JSON), parse it
+    if (typeof mastraOutput === 'string') {
+      try {
+        transactionData = JSON.parse(mastraOutput);
+      } catch (parseError) {
+        logger.warn('⚠️ MASTRA output is not valid JSON, treating as text');
+        return [];
+      }
+    }
+    
+    // Extract transactions array from MASTRA response
+    const transactions = transactionData.transactions || transactionData || [];
+    
+    if (!Array.isArray(transactions)) {
+      logger.warn('⚠️ MASTRA output does not contain transactions array');
+      return [];
+    }
+    
+    // Convert MASTRA format to Actual Budget format
+    const convertedTransactions = transactions.map((transaction: any) => {
+      // Convert Spanish date format (DD/MM/YYYY) to ISO format (YYYY-MM-DD)
+      let dateStr = transaction.date;
+      if (dateStr && dateStr.includes('/')) {
+        const [day, month, year] = dateStr.split('/');
+        dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+      
+      // Convert amount from decimal to integer (cents)
+      const amount = Math.round((transaction.amount || 0) * 100);
+      
+      return {
+        amount,
+        date: dateStr,
+        payee_name: transaction.description || 'Unknown Transaction',
+        imported_payee: transaction.description || '',
+        notes: importNotes ? (transaction.notes || transaction.type || '') : ''
+      };
+    });
+    
+    logger.info(`✅ Converted ${convertedTransactions.length} MASTRA transactions to Actual format`);
+    return convertedTransactions;
+    
+  } catch (error) {
+    logger.error('❌ Error parsing MASTRA output:', error);
+    return [];
+  }
+}
+
+// Fallback patterns if MASTRA is not available
+const SPANISH_BANK_PATTERNS = [
+  {
+    type: 'card_payment',
+    name: 'Pago Móvil',
+    // Format: "Pago Movil En Saint Georges, Madrid, Tarj. :*536242-6,00 EUR3.847,32 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Pago\s+Movil\s+En\s+([^,]+),\s*([^,]+),\s*Tarj\.\s*:[^-]*-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'contactless_payment',
+    name: 'Transacción Contactless',
+    // Format: "Transaccion Contactless En Saint Georges C, Madrid, Tarj. :\n*536242\n-3,00 EUR5.220,83 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Transaccion\s+Contactless\s+En\s+([^,]+),\s*([^,]+),\s*Tarj\.\s*:[^-]*-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'purchase',
+    name: 'Compra',
+    // Format: "Compra Amazon Prime*2t6fk5rt5, Amazon.es/prm, Tarjeta \n4176570102536242 , Comision 0,00\n-4,99 EUR4.093,16 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Compra\s+([^,]+),\s*([^,]*),?\s*Tarjeta[\s\S]*?-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'transfer_in',
+    name: 'Transferencia Recibida',
+    // Format: "Transferencia Inmediata De Healy Maria Del Rosario,320,00 EUR5.225,73 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Transferencia\s+Inmediata\s+De\s+([^,]+),?(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'transfer_out',
+    name: 'Transferencia Enviada',  
+    // Format: "Transferencia Inmediata A Favor De Sebastian Ropero-28,39 EUR4.900,00 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Transferencia\s+Inmediata\s+A\s+Favor\s+De\s+([^-]+)-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'cash_withdrawal',
+    name: 'Retirada de Efectivo',
+    // Format: "Retirada De Efectivo En Cajero Automatico 004901280020 El \n17/09/2025 A Las 14:36..pan:4176570102536242.\n-140,00 EUR4.214,26 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Retirada\s+De\s+Efectivo\s+En\s+Cajero\s+Automatico[\s\S]*?-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'tax',
+    name: 'Impuesto',
+    // Format: "Impuesto: 2025 Tasas Del Tesoro.-28,87 EUR3.853,32 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Impuesto:\s*([^-]*)-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'traspaso',
+    name: 'Traspaso',
+    // Format: "Traspaso:-50,00 EUR3.882,19 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Traspaso:-(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'refund',
+    name: 'Devolución',
+    // Format: "Devolucion Compra En Mgp*wallapop S L, Barcelona, Tarjeta \n4176570102536242 , Comision 0,00\n37,78 EUR4.664,46 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Devolucion\s+Compra\s+En\s+([^,]+),\s*([^,]+),?\s*Tarjeta[\s\S]*?(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  },
+  {
+    type: 'credit_note',
+    name: 'Nota de Abono',
+    // Format: "Recepcion De Nota De Abono82,67 EUR4.287,89 EUR"
+    regex: /(\d{2}\/\d{2}\/\d{4})[\s\S]*?Recepcion\s+De\s+Nota\s+De\s+Abono(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/gm
+  }
+];
+
+function parseSpanishAmount(amountStr: string): number | null {
+  try {
+    // Handle Spanish number format: 1.234,56 -> 1234.56
+    const cleanAmount = amountStr.replace(/\./g, '').replace(',', '.');
+    const amount = parseFloat(cleanAmount);
+    return isNaN(amount) ? null : amount;
+  } catch {
+    return null;
+  }
+}
+
+function parseSpanishDate(dateStr: string): string {
+  try {
+    // Convert DD/MM/YYYY to YYYY-MM-DD format for Actual Budget
+    const [day, month, year] = dateStr.split('/');
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  } catch {
+    return dateStr; // Return original if parsing fails
+  }
+}
+
+async function extractPDFTextFromBuffer(buffer: Buffer): Promise<string> {
+  try {
+    logger.info('📖 Processing PDF buffer');
+    logger.info('📊 Buffer size: ' + buffer.length + ' bytes');
+    logger.info('� Buffer type: ' + typeof buffer);
+    
+    logger.info('📊 Buffer size: ' + buffer.length + ' bytes');
+    
+    // Try to detect if it's a real PDF by checking the header
+    const bufferStr = buffer.toString('utf8', 0, Math.min(10, buffer.length));
+    logger.info('🔍 File header: ' + bufferStr);
+    
+    if (!bufferStr.startsWith('%PDF-')) {
+      // Not a real PDF, treat as text file
+      logger.info('📝 Not a real PDF, treating as text file');
+      return buffer.toString('utf8');
+    }
+    
+    // It's a real PDF - use pdf-parse
+    logger.info('🔧 Processing real PDF with pdf-parse...');
+    
+    try {
+      // Use pdfjs-dist which is browser-compatible
+      const pdfjsLib = await import('pdfjs-dist');
+      logger.info('📦 pdfjs-dist module loaded successfully');
+      
+      // Configure worker source for pdfjs (using CDN for browser compatibility)
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      
+      const loadingTask = pdfjsLib.getDocument({ data: buffer });
+      const pdfDoc = await loadingTask.promise;
+      
+      logger.info('✅ PDF loaded successfully');
+      logger.info('📄 Pages: ' + pdfDoc.numPages);
+      
+      let fullText = '';
+      
+      // Extract text from all pages
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const page = await pdfDoc.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      logger.info('📝 Text length: ' + fullText.length);
+      logger.info('🔤 First 200 chars: ' + fullText.substring(0, 200));
+      
+      return fullText;
+    } catch (pdfError) {
+      logger.error('❌ PDF parsing failed: ' + pdfError.message);
+      logger.error('🔍 PDF Error details: ' + pdfError.toString());
+      throw new Error(`PDF parsing failed: ${pdfError.message}`);
+    }
+    
+  } catch (err) {
+    logger.error('❌ PDF extraction failed: ' + err.message);
+    throw new Error(`Failed to extract PDF text: ${err.message}`);
+  }
+}
+
+export async function parsePDFFromBuffer(
+  buffer: Buffer,
+  options: ParseFileOptions = {},
+): Promise<ParseFileResult> {
+  const errors: ParseError[] = [];
+  const { bankType = 'santander', importNotes = true } = options;
+  
+  logger.info(`� MASTRA-powered PDF parser starting - Buffer: ${buffer.length} bytes, Bank: ${bankType}`);
+  
+  try {
+    // First, try MASTRA AI agent
+    try {
+      logger.info('🤖 Attempting MASTRA AI agent processing...');
+      
+      // Convert buffer to base64 for MASTRA
+      const pdfBase64 = buffer.toString('base64');
+      
+      // Call MASTRA agent
+      const mastraResult = await callMastraAgent(pdfBase64, bankType);
+      
+      if (mastraResult && mastraResult.output) {
+        logger.info('✅ MASTRA processing successful!');
+        
+        // Parse MASTRA output - it should contain structured transaction data
+        const transactions = await parseMastraOutput(mastraResult.output, importNotes);
+        
+        logger.info(`📊 MASTRA extracted ${transactions.length} transactions`);
+        
+        if (transactions.length > 0) {
+          return { errors, transactions };
+        } else {
+          logger.warn('⚠️ MASTRA returned no transactions, falling back to local patterns');
+        }
+      }
+    } catch (mastraError) {
+      logger.warn('⚠️ MASTRA agent failed, falling back to local processing:', mastraError.message);
+      errors.push({
+        message: `MASTRA agent unavailable: ${mastraError.message}`,
+        internal: 'Falling back to local pattern matching'
+      });
+    }
+    
+    // Fallback to local processing
+    logger.info('� Using fallback local pattern processing...');
+    
+    // Extract text from PDF buffer
+    const extractedText = await extractPDFTextFromBuffer(buffer);
+    
+    if (!extractedText || extractedText.length === 0) {
+      errors.push({
+        message: 'No text could be extracted from the PDF file',
+        internal: 'PDF text extraction returned empty result'
+      });
+      return { errors, transactions: [] };
+    }
+    
+    logger.info(`📝 Text extracted - Length: ${extractedText.length} chars`);
+    
+    const transactions: any[] = [];
+    
+    // Process each pattern type with fallback logic
+    for (const pattern of SPANISH_BANK_PATTERNS) {
+      let match;
+      let matchCount = 0;
+      while ((match = pattern.regex.exec(extractedText)) !== null) {
+        matchCount++;
+        // Log match found
+        if (matchCount === 1) {
+          logger.info(`✅ Found ${pattern.type} matches`);
+          logger.info(`📝 First match: ${match[0].substring(0, 100)}...`);
+        }
+        let transaction = null;
+        
+        try {
+          if (pattern.type === 'card_payment' || pattern.type === 'contactless_payment') {
+            const [, dateStr, merchant, location, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: merchant.trim(),
+                imported_payee: merchant.trim(),
+                amount: -Math.abs(amount), // Card payments are debits
+                notes: importNotes ? `${pattern.name} en ${merchant}, ${location}` : null
+              };
+            }
+          } else if (pattern.type === 'purchase') {
+            const [, dateStr, merchant, location, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: merchant.trim(),
+                imported_payee: merchant.trim(),
+                amount: -Math.abs(amount), // Purchases are debits
+                notes: importNotes ? `${pattern.name} en ${merchant}${location ? ', ' + location : ''}` : null
+              };
+            }
+          } else if (pattern.type === 'transfer_in') {
+            const [, dateStr, from, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: from.trim(),
+                imported_payee: from.trim(),
+                amount: Math.abs(amount), // Incoming transfers are credits
+                notes: importNotes ? `${pattern.name} de ${from}` : null
+              };
+            }
+          } else if (pattern.type === 'transfer_out') {
+            const [, dateStr, to, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: to.trim(),
+                imported_payee: to.trim(),
+                amount: -Math.abs(amount), // Outgoing transfers are debits
+                notes: importNotes ? `${pattern.name} a ${to}` : null
+              };
+            }
+          } else if (pattern.type === 'cash_withdrawal') {
+            const [, dateStr, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: 'Cajero Automático',
+                imported_payee: 'Cajero Automático',
+                amount: -Math.abs(amount), // Cash withdrawals are debits
+                notes: importNotes ? pattern.name : null
+              };
+            }
+          } else if (pattern.type === 'tax') {
+            const [, dateStr, description, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: 'Hacienda/Tasas',
+                imported_payee: 'Hacienda/Tasas',
+                amount: -Math.abs(amount), // Taxes are debits
+                notes: importNotes ? `${pattern.name}: ${description.trim()}` : null
+              };
+            }
+          } else if (pattern.type === 'traspaso') {
+            const [, dateStr, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: 'Traspaso Interno',
+                imported_payee: 'Traspaso Interno',
+                amount: -Math.abs(amount), // Internal transfers are typically debits
+                notes: importNotes ? pattern.name : null
+              };
+            }
+          } else if (pattern.type === 'refund') {
+            const [, dateStr, merchant, location, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: merchant.trim(),
+                imported_payee: merchant.trim(),
+                amount: Math.abs(amount), // Refunds are credits
+                notes: importNotes ? `${pattern.name} de ${merchant}` : null
+              };
+            }
+          } else if (pattern.type === 'credit_note') {
+            const [, dateStr, amountStr] = match;
+            const amount = parseSpanishAmount(amountStr);
+            
+            if (amount !== null) {
+              transaction = {
+                date: parseSpanishDate(dateStr),
+                payee_name: 'Nota de Abono',
+                imported_payee: 'Nota de Abono',
+                amount: Math.abs(amount), // Credit notes are credits
+                notes: importNotes ? pattern.name : null
+              };
+            }
+          }
+          
+          if (transaction && transaction.amount !== null && transaction.date) {
+            transactions.push(transaction);
+          }
+        } catch (err) {
+          logger.warn(`Error processing transaction pattern ${pattern.type}: ${err.message}`);
+        }
+      }
+    }
+    
+    // Remove duplicates based on date, amount, and payee
+    const uniqueTransactions = transactions.filter((transaction, index, self) => 
+      index === self.findIndex(t => 
+        t.date === transaction.date && 
+        Math.abs(t.amount - transaction.amount) < 0.01 && 
+        t.payee_name === transaction.payee_name
+      )
+    );
+    
+    // Sort by date
+    uniqueTransactions.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    logger.info(`Parsed PDF: extracted ${uniqueTransactions.length} unique transactions from ${bankType} statement`);
+    
+    // TEMPORARY: Add final result debug message
+    errors.push({
+      message: `DEBUG: Processing complete - ${transactions.length} raw → ${uniqueTransactions.length} unique`,
+      internal: uniqueTransactions.length > 0 ? `Sample: ${JSON.stringify(uniqueTransactions[0])}` : 'No transactions found'
+    });
+    
+    return {
+      errors,
+      transactions: uniqueTransactions
+    };
+    
+  } catch (err) {
+    // TEMPORARY: Show detailed error in UI for debugging
+    errors.push({
+      message: `DEBUG ERROR: ${err.message}`,
+      internal: `Buffer: ${buffer.length} bytes, Bank: ${bankType}, Stack: ${err.stack?.substring(0, 300) || 'No stack'}`
+    });
+    
+    errors.push({
+      message: 'Failed to parse Spanish bank PDF',
+      internal: `Error: ${err.message || 'Unknown error'}\nBuffer size: ${buffer.length}\nBankType: ${bankType}\nStack: ${err.stack?.substring(0, 500) || 'No stack'}`
+    });
+    
+    return { errors, transactions: [] };
+  }
+}
