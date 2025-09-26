@@ -1,5 +1,5 @@
 {
-  "name": "actual_finance_sr",
+  "name": "mastra-pdf-importer",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -22,6 +22,8 @@
     "@mastra/libsql": "^0.14.3",
     "@mastra/loggers": "^0.10.13",
     "@mastra/memory": "^0.15.3",
+    "dotenv": "^17.2.2",
+    "pdf-parse": "^1.1.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
