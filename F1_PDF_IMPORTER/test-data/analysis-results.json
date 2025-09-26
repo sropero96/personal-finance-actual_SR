@@ -1,0 +1,175 @@
+{
+  "santander": {
+    "files": [
+      {
+        "fileName": "SANTANDER_AUG3_25.pdf",
+        "numPages": 3,
+        "patterns": {
+          "bankIdentifiers": [],
+          "dateFormats": [
+            "26/08/2025",
+            "24/08/2025"
+          ],
+          "amountFormats": [
+            "7.227,86",
+            "17,99",
+            "-6,95",
+            "0,00",
+            "-17,00",
+            "7.234,81",
+            "-100,00",
+            "7.251,81",
+            "-1,50"
+          ],
+          "accountNumbers": [
+            "24004971750328100765"
+          ],
+          "sampleTransactions": [
+            "26/08/2025Retenciones :17,99",
+            "26/08/2025Retenciones :17,99",
+            "26/08/2025Retenciones :17,99"
+          ]
+        }
+      },
+      {
+        "fileName": "SANTANDER_JUL3_25.pdf",
+        "numPages": 2,
+        "patterns": {
+          "bankIdentifiers": [],
+          "dateFormats": [
+            "26/07/2025",
+            "25/07/2025",
+            "23/07/2025",
+            "24/07/2025"
+          ],
+          "amountFormats": [
+            "9.424,46",
+            "17,99",
+            "-15,13",
+            "0,00",
+            "-41,00",
+            "9.439,59",
+            "-23,95",
+            "9.480,59",
+            "-6,78"
+          ],
+          "accountNumbers": [
+            "24004971750328100765"
+          ],
+          "sampleTransactions": [
+            "26/07/2025Retenciones :17,99",
+            "26/07/2025Retenciones :17,99"
+          ]
+        }
+      },
+      {
+        "fileName": "SANTANDER_SEPT3_25.pdf",
+        "numPages": 2,
+        "patterns": {
+          "bankIdentifiers": [],
+          "dateFormats": [
+            "26/09/2025",
+            "25/09/2025",
+            "24/09/2025"
+          ],
+          "amountFormats": [
+            "3.791,93",
+            "17,99",
+            "-30,00",
+            "3.809,92",
+            "-7,40",
+            "3.839,92",
+            "-6,00",
+            "3.847,32",
+            "-28,87",
+            "3.853,32"
+          ],
+          "accountNumbers": [
+            "24004971750328100765"
+          ],
+          "sampleTransactions": [
+            "26/09/2025Retenciones :17,99",
+            "26/09/2025Retenciones :17,99"
+          ]
+        }
+      }
+    ],
+    "patterns": {
+      "bankIdentifiers": [],
+      "dateFormats": [],
+      "transactionStructures": [],
+      "amountFormats": [],
+      "accountFormats": []
+    }
+  },
+  "revolut": {
+    "files": [
+      {
+        "fileName": "REVOLUT_AUG25.pdf",
+        "numPages": 2,
+        "patterns": {
+          "bankIdentifiers": [
+            "Revolut"
+          ],
+          "dateFormats": [
+            "4 ago 2025",
+            "5 ago 2025",
+            "7 ago 2025",
+            "8 ago 2025",
+            "18 ago 2025",
+            "23 ago 2025"
+          ],
+          "amountFormats": [
+            "1.70\nNRC"
+          ],
+          "accountHolders": [],
+          "sampleTransactions": []
+        }
+      },
+      {
+        "fileName": "REVOLUT_JUL25.pdf",
+        "numPages": 3,
+        "patterns": {
+          "bankIdentifiers": [
+            "Revolut"
+          ],
+          "dateFormats": [
+            "1 jul 2025",
+            "3 jul 2025",
+            "4 jul 2025",
+            "7 jul 2025"
+          ],
+          "amountFormats": [
+            "1.70\nNRC"
+          ],
+          "accountHolders": [],
+          "sampleTransactions": []
+        }
+      },
+      {
+        "fileName": "REVOLUT_SEPT25.pdf",
+        "numPages": 1,
+        "patterns": {
+          "bankIdentifiers": [
+            "Revolut"
+          ],
+          "dateFormats": [
+            "15\nP03\n2800"
+          ],
+          "amountFormats": [
+            "1.70\nNRC"
+          ],
+          "accountHolders": [],
+          "sampleTransactions": []
+        }
+      }
+    ],
+    "patterns": {
+      "bankIdentifiers": [],
+      "dateFormats": [],
+      "transactionStructures": [],
+      "amountFormats": [],
+      "accountFormats": []
+    }
+  }
+}
