@@ -4,10 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run --reporter=default",
+    "test:verbose": "vitest run --reporter=verbose",
+    "test:cov": "vitest run --coverage --reporter=default",
     "dev": "mastra dev",
     "build": "mastra build",
-    "start": "mastra start"
+    "start": "mastra start",
+    "demo:curation": "tsx scripts/run-curation-demo.ts",
+  "demo:feedback": "tsx scripts/apply-feedback.ts",
+  "fixtures:extract": "tsx scripts/generate-extractor-fixture.ts",
+  "demo:curator:mock": "tsx scripts/run-curator-mock.ts"
   },
   "keywords": [],
   "author": "",
@@ -28,7 +34,10 @@
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
+    "@vitest/coverage-v8": "^3.2.4",
     "mastra": "^0.13.2",
-    "typescript": "^5.9.2"
+    "tsx": "^4.19.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   }
 }

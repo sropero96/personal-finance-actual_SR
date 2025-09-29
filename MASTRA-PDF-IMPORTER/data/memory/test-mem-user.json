@@ -1,0 +1,14 @@
+{
+  "payeeMap": {
+    "abc123hashdemo": "CAFETERIA"
+  },
+  "categoryMap": {},
+  "corrections": [
+    {
+      "txHash": "abc123hashdemo",
+      "newPayee": "CAFETERIA",
+      "timestamp": 1759164470485
+    }
+  ],
+  "historyVersion": 1
+}

@@ -8,6 +8,8 @@
 
 **Stack Principal:** MASTRA AI Agents + Actual Budget + TypeScript + React
 
+> Nota de alineación (Sprint 1 completado): Se implementó únicamente el primer agente (Extracción PDF) con un conjunto mínimo de tools: `save-file`, `pdf-reader` (entrada `filePath`), `santander-parser` (versión `santander-parser-v2.ts`) y `revolut-parser`. Elementos descritos aquí como workflows, segundo agente (Data Curator), evaluaciones automáticas y orquestación permanecen como plan futuro y no forman parte aún del código en la rama actual.
+
 ---
 
 ## 📋 1. Análisis del Producto Base
@@ -64,7 +66,8 @@ Actual Budget ya tiene un sistema robusto de importación de transacciones que s
 ## 🏗️ 3. Arquitectura Técnica con MASTRA
 
 ### 3.1 Estructura MASTRA
-```
+
+```text
 mastra-actual_finance_sr/           # Proyecto MASTRA principal
 ├── mastra.config.ts                # Configuración MASTRA
 ├── agents/
@@ -89,10 +92,11 @@ mastra-actual_finance_sr/           # Proyecto MASTRA principal
 └── evaluations/
     ├── extraction-eval.ts          # Evaluaciones agente extractor
     └── curation-eval.ts           # Evaluaciones agente curador
-```
+```text
 
 ### 3.2 Integración con Actual Budget
-```
+
+```text
 packages/
 ├── pdf-mastra-integration/         # 🆕 Módulo de integración
 │   ├── package.json
@@ -107,6 +111,7 @@ packages/
 ```
 
 ### 3.3 Flujo de Datos Completo
+
 ```mermaid
 graph TB
     A[Usuario selecciona PDF] 
@@ -126,7 +131,9 @@ graph TB
 ```
 
 ### 3.4 Configuración MCP Server
+
 El MCP Server ya instalado permitirá:
+
 - Consulta de documentación MASTRA en tiempo real
 - Generación de código para agentes y tools
 - Acceso a ejemplos y mejores prácticas
@@ -140,33 +147,23 @@ El MCP Server ya instalado permitirá:
 
 **Objetivo:** Crear y validar el primer agente en el playground de MASTRA
 
-**Entregables:**
-- [ ] Configuración del agente PDF Extractor en MASTRA
-- [ ] Desarrollo de tools para lectura y parsing de PDFs
-- [ ] Testing en MASTRA Playground con traces detallados
-- [ ] Evaluaciones (evals) para medir precisión de extracción
-- [ ] Documentación de prompts y configuración del agente
+**Entregables (Estado real Sprint 1):**
 
-**Tareas técnicas:**
-```typescript
-// agents/pdf-extractor-agent/agent.ts
-import { Agent } from '@mastra/core';
-import { pdfReaderTool } from './tools/pdf-reader';
-import { santanderParserTool } from './tools/santander-parser';
-import { revolutParserTool } from './tools/revolut-parser';
+- [x] Agente PDF Extractor básico funcionando
+- [x] Tools mínimas: `save-file`, `pdf-reader`, `santander-parser`, `revolut-parser`
+- [x] Flujo manual validado (subir base64 -> guardar -> leer -> parsear)
+- [ ] Evaluaciones automatizadas (pendiente)
+- [ ] Métricas avanzadas de confianza / metadata extendida (pendiente)
 
-export const pdfExtractorAgent = new Agent({
-  name: 'PDF_EXTRACTOR',
-  instructions: `
-    Eres un especialista en extracción de datos de extractos bancarios PDF.
-    Tu objetivo es identificar y estructurar todas las transacciones financieras
-    contenidas en PDFs de Banco Santander y Revolut.
-  `,
-  tools: [pdfReaderTool, santanderParserTool, revolutParserTool]
-});
-```
+**Tareas técnicas (ajuste a implementación real):**
+
+1. Tool `save-file` para persistir PDF base64 en `temp/`.
+2. Tool `pdf-reader` acepta `filePath` y devuelve `{ rawText, pageCount, success }`.
+3. Parsers (`santander-parser-v2.ts`, `revolut-parser.ts`) retornan `{ bankName, transactions[], totalTransactions, success }` sin metadata avanzada.
+4. Agente orquesta: detectar banco por texto y llamar parser adecuado.
 
 **Testing en Playground:**
+
 - Cargar PDFs de prueba de ambos bancos
 - Verificar traces de ejecución de cada tool
 - Medir precisión de extracción con métricas definidas
@@ -177,13 +174,15 @@ export const pdfExtractorAgent = new Agent({
 **Objetivo:** Crear y validar el segundo agente de forma independiente
 
 **Entregables:**
-- [ ] Configuración del agente Data Curator en MASTRA  
+
+- [ ] Configuración del agente Data Curator en MASTRA
 - [ ] Desarrollo de tools para curación de datos
 - [ ] Testing aislado con datos estructurados del primer agente
 - [ ] Evaluaciones para medir calidad de curación
 - [ ] Documentación de lógica de matching y sugerencias
 
 **Tareas técnicas:**
+
 ```typescript
 // agents/data-curator-agent/agent.ts
 import { Agent } from '@mastra/core';
@@ -203,6 +202,7 @@ export const dataCuratorAgent = new Agent({
 ```
 
 **Testing independiente:**
+
 - Usar outputs del primer agente como inputs
 - Validar lógica de matching con datos existentes de Actual
 - Verificar detección de duplicados
@@ -301,37 +301,11 @@ export class MastraClient {
 ## ⚙️ 5. Especificaciones Técnicas de Agentes
 
 ### 5.1 Agente 1: PDF Extractor
-```typescript
-// Tools del agente extractor
-interface PDFReaderTool {
-  name: 'pdf_reader';
-  description: 'Lee y extrae texto de archivos PDF bancarios';
-  parameters: {
-    pdfBuffer: Buffer;
-    extractOptions: {
-      preserveLayout: boolean;
-      includePositions: boolean;
-    };
-  };
-}
-
-interface SantanderParserTool {
-  name: 'santander_parser';
-  description: 'Parsea extractos específicos de Banco Santander';
-  parameters: {
-    rawText: string;
-    pageLayout: PDFLayout[];
-  };
-}
-
-interface RevolutParserTool {
-  name: 'revolut_parser';
-  description: 'Parsea extractos específicos de Revolut';
-  parameters: {
-    rawText: string;
-    pageLayout: PDFLayout[];
-  };
-}
+> Simplificación Sprint 1: Interfaces planificadas con `pdfBuffer`, `pageLayout` y metadata no se implementaron todavía. Se usa versión mínima:
+```
+save-file: { base64Data, filename? } -> { filePath, success }
+pdf-reader: { filePath } -> { rawText, pageCount, success }
+santander-parser / revolut-parser: { rawText } -> { bankName, transactions[], totalTransactions, success }
 ```
 
 **Prompt del Agente:**
@@ -357,27 +331,13 @@ con la mayor precisión posible, estructurando la información en formato JSON. 
 5. Asigna score de confianza a cada transacción extraída
 6. Valida la cantidad de transacciones extraidas contra el PDF original.
 
-## Formato de Output
+## Formato de Output (versión mínima actual)
 ```json
 {
-  "bankType": "santander" | "revolut",
-  "extractionDate": "ISO_DATE",
-  "transactions": [
-    {
-      "date": "YYYY-MM-DD",
-      "description": "string",
-      "amount": number,
-      "balance": number,
-      "rawText": "string",
-      "confidence": 0.0-1.0,
-      "transactionId": "string"
-    }
-  ],
-  "metadata": {
-    "totalTransactions": number,
-    "averageConfidence": number,
-    "processingTime": number
-  }
+  "bankName": "Santander" | "Revolut",
+  "transactions": [ { "date": "YYYY-MM-DD", "description": "string", "amount": number, "balance": number, "type": "debit|credit", "rawText": "string" } ],
+  "totalTransactions": number,
+  "success": true
 }
 ```
 
@@ -626,7 +586,7 @@ PDF_AGENT_ENDPOINT=http://localhost:3000/workflows/pdf-import
 
 # Actual Budget Integration  
 ACTUAL_BUDGET_API_URL=http://localhost:5006
-```
+```typescript
 
 ### 8.3 Comandos de Desarrollo
 ```bash
@@ -641,7 +601,7 @@ npm run eval:curation        # Ejecutar evaluaciones de curación
 cd personal-finance-actual_SR  
 npm run dev:with-pdf          # Iniciar con soporte PDF habilitado
 npm run test:pdf-integration  # Tests de integración completa
-```
+```bash
 
 ---
 
