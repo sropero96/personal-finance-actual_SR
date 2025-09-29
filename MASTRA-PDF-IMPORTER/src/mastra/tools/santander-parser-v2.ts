@@ -67,12 +67,13 @@ export const santanderParserTool = createTool({
       // Nueva estrategia: buscar secuencias específicas del formato Santander
       // Basado en el análisis del PDF real, cada transacción sigue este patrón:
       // 1. Fecha de operación (dd/mm/yyyy)  
-      // 2. Texto " Fecha valor:dd/mm/yyyy"
+      // 2. Texto " Fecha valor:dd/mm/yyyy" (puede estar en línea separada)
       // 3. Descripción de la transacción
       // 4. Importe con EUR seguido inmediatamente por saldo con EUR
       
       // Dividir el texto en segmentos que contengan transacciones
-      const transactionSegments = rawText.split(/(?=\d{2}\/\d{2}\/\d{4}\s+Fecha valor:)/);
+      // Mejorar el patrón para aceptar saltos de línea entre fecha y "Fecha valor"
+      const transactionSegments = rawText.split(/(?=\d{2}\/\d{2}\/\d{4}(?:\s*\n\s*|\s+)Fecha valor:)/);
       
       for (const segment of transactionSegments) {
         if (segment.trim().length === 0) continue;
@@ -83,13 +84,13 @@ export const santanderParserTool = createTool({
         
         const operationDate = operationDateMatch[1];
         
-        // Extraer fecha valor
-        const valueDateMatch = segment.match(/Fecha valor:(\d{2}\/\d{2}\/\d{4})/);
+        // Extraer fecha valor (permitir saltos de línea)
+        const valueDateMatch = segment.match(/Fecha valor:\s*(\d{2}\/\d{2}\/\d{4})/);
         if (!valueDateMatch) continue;
         
         // Buscar el patrón de importe y saldo al final del segmento
-        // Patrón: importe EUR seguido por saldo EUR (pueden ser negativos)
-        const amountBalanceMatch = segment.match(/(-?\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/);
+        // Patrón mejorado: buscar dos cantidades EUR consecutivas
+        const amountBalanceMatch = segment.match(/(-?\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR/);
         if (!amountBalanceMatch) continue;
         
         const amountStr = amountBalanceMatch[1];
