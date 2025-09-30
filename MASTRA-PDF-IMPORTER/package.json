@@ -4,16 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run --reporter=default",
-    "test:verbose": "vitest run --reporter=verbose",
-    "test:cov": "vitest run --coverage --reporter=default",
-    "dev": "mastra dev",
-    "build": "mastra build",
-    "start": "mastra start",
-    "demo:curation": "tsx scripts/run-curation-demo.ts",
-  "demo:feedback": "tsx scripts/apply-feedback.ts",
-  "fixtures:extract": "tsx scripts/generate-extractor-fixture.ts",
-  "demo:curator:mock": "tsx scripts/run-curator-mock.ts"
+  "dev": "mastra dev"
   },
   "keywords": [],
   "author": "",

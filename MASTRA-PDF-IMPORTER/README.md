@@ -1,90 +1,40 @@
-# Mastra PDF Importer & Data Curator
+# Mastra PDF Importer (Fase 1)
 
-Pipeline experimental para:
+Objetivo actual: extraer y estructurar transacciones desde PDFs bancarios (agente extractor) produciendo un JSON consistente (fecha ISO, descripción limpia, importe numérico, campos brutos útiles) listo para posterior post-proceso externo.
 
-* Extraer texto/operaciones bancarias desde PDFs (agente extractor)
-* Normalizar y enriquecer transacciones (agente curator)
-* Persistir memoria de usuario (payees / categorías corregidas)
-* Calcular métricas y detectar duplicados
+## Estado
 
-## Componentes principales
+Se ha eliminado el segundo agente experimental de curación y todas sus herramientas para simplificar el alcance inicial.
 
-* `pdf-extractor-agent`: Orquesta herramientas de parsing por banco.
-* `data-curator-agent`: Normaliza, sugiere payee/categoría, detecta duplicados, puntúa y genera métricas.
-* Tools clave:
-  * `normalize-transaction`
-  * `payee-suggester` (secondary key: descripción normalizada + bucket de importe redondeado)
-  * `category-suggester`
-  * `duplicate-detector` (tolerancia fecha ±1 día y importe ±2%)
-  * `tx-scoring`
-  * `user-memory-get` / `user-memory-upsert`
-  * `curation-metrics`
+## Agente Activo
 
-## Scripts
+* `pdf-extractor-agent`: orquesta parsers específicos (ej. Santander, Revolut) y produce una lista de transacciones parseadas.
 
-```bash
-yarn workspace mastra-pdf-importer run dev            # entorno mastra playground
-yarn workspace mastra-pdf-importer run demo:curation  # demo pipeline (stub)
-yarn workspace mastra-pdf-importer run demo:feedback  # aplica feedback a memoria
-yarn workspace mastra-pdf-importer run fixtures:extract  # genera fixture desde PDF
-```
-
-## Tests & Cobertura
-
-```bash
-yarn workspace mastra-pdf-importer run test:verbose
-yarn workspace mastra-pdf-importer run test:cov
-```
-
-Genera carpeta `coverage/` (V8).
-
-## Métricas
-
-`curation-metrics` produce:
+## Salida Esperada (ejemplo mínimo)
 
 ```json
-{
-  "total": 0,
-  "normalized": 0,
-  "withPayeeSuggestion": 0,
-  "withCategorySuggestion": 0,
-  "duplicates": 0,
-  "fromMemoryPayee": 0,
-  "fromMemoryCategory": 0,
-  "avgScore": 0
-}
+[
+  { "date": "2025-09-12", "description": "COMPRA MERCADONA TARJETA", "amount": -23.45, "raw": { /* campos originales */ } }
+]
 ```
 
-## Issue taxonomy
+## Script
 
-* `invalid_date`
-* `invalid_amount`
-* `hash_collision`
-* `missing_required_field`
-* `normalization_failure`
-
-## Memoria
-
-Archivo JSON por usuario en `data/memory/{userId}.json`:
-
-```json
-{
-  "payeeMap": { "hash|secondaryKey": "PAYEE" },
-  "categoryMap": { "hash": "CATEGORY" },
-  "corrections": [],
-  "historyVersion": 1
-}
+```bash
+yarn workspace mastra-pdf-importer run dev
 ```
 
-Secondary key: `<normalizedDescription>::<importeRedondeado>`.
+## Archivo Histórico (Experimento Curador)
 
-## Próximas mejoras
+La fase 2 (curación: normalización avanzada, sugerencias, duplicados, métricas, memoria) fue exploratoria y se ha retirado del código para reducir complejidad temprana. Consultar `ARCHITECTURE_OVERVIEW.md` y planes en `F1_PDF_IMPORTER/` para detalles conceptuales si se reactiva en el futuro.
 
-* Test E2E con snapshot curator output.
-* Secondary key también para categorías.
-* Ajuste dinámico de pesos duplicate.
-* Persistencia SQLite / LibSQL file.
+## Próximos Pasos (enfoque acotado)
+
+1. Asegurar cobertura de parsers principales.
+2. Unificación de formato de fechas y normalización de importe dentro del extractor.
+3. Validaciones básicas (campos obligatorios) antes de exportar.
+4. Integración con pipeline externo de categorización.
 
 ## Licencia
 
-MIT (hereda configuración del monorepo).
+MIT

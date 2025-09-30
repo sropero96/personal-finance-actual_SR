@@ -1,8 +1,0 @@
-[
-  { "date": "12/09/2025", "description": "Compra Mercadona ref 123456789 factura 998877", "amount": "-23,45" },
-  { "date": "2025-09-12", "description": "UBER TRIP Barcelona centro", "amount": -12.30 },
-  { "date": "11/09/2025", "description": "Spotify subscription mensual", "amount": "-9,99" },
-  { "date": "10/09/2025", "description": "Alquiler Piso Septiembre", "amount": "-800" },
-  { "date": "09/09/2025", "description": "Transferencia recibida Nómina Empresa XYZ", "amount": 2500 },
-  { "date": "13/09/2025", "description": "Compra mercadona REF 54321", "amount": "-24,10" }
-]
