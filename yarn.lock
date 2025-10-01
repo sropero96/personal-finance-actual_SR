@@ -8521,6 +8521,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/body-parser@npm:^1.19.2":
+  version: 1.19.6
+  resolution: "@types/body-parser@npm:1.19.6"
+  dependencies:
+    "@types/connect": "npm:*"
+    "@types/node": "npm:*"
+  checksum: 10/33041e88eae00af2cfa0827e951e5f1751eafab2a8b6fce06cd89ef368a988907996436b1325180edaeddd1c0c7d0d0d4c20a6c9ff294a91e0039a9db9e9b658
+  languageName: node
+  linkType: hard
+
 "@types/bunyan@npm:1.8.11":
   version: 1.8.11
   resolution: "@types/bunyan@npm:1.8.11"
@@ -8776,7 +8786,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/express@npm:^4.17.23":
+"@types/express@npm:^4.17.17, @types/express@npm:^4.17.23":
   version: 4.17.23
   resolution: "@types/express@npm:4.17.23"
   dependencies:
@@ -10683,7 +10693,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"body-parser@npm:1.20.3":
+"body-parser@npm:1.20.3, body-parser@npm:^1.20.2":
   version: 1.20.3
   resolution: "body-parser@npm:1.20.3"
   dependencies:
@@ -14257,7 +14267,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"express@npm:^4.21.2":
+"express@npm:^4.18.2, express@npm:^4.21.2":
   version: 4.21.2
   resolution: "express@npm:4.21.2"
   dependencies:
@@ -17793,10 +17803,15 @@ __metadata:
     "@mastra/libsql": "npm:^0.14.3"
     "@mastra/loggers": "npm:^0.10.13"
     "@mastra/memory": "npm:^0.15.3"
+    "@types/body-parser": "npm:^1.19.2"
+    "@types/express": "npm:^4.17.17"
     "@types/node": "npm:^24.5.2"
     "@vitest/coverage-v8": "npm:^3.2.4"
+    body-parser: "npm:^1.20.2"
     dotenv: "npm:^17.2.2"
+    express: "npm:^4.18.2"
     mastra: "npm:^0.13.2"
+    node-fetch: "npm:^3.3.2"
     pdf-parse: "npm:^1.1.1"
     tsx: "npm:^4.19.1"
     typescript: "npm:^5.9.2"

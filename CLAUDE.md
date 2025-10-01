@@ -113,9 +113,10 @@ Custom query language in `packages/loot-core/src/server/aql/`:
 
 ### Transaction Import System
 Located in `packages/loot-core/src/server/transactions/import/`:
-- Supports multiple formats: OFX, QFX, CSV, QIF
+- Supports multiple formats: OFX, QFX, CSV, QIF, **PDF** (via AI agent)
 - Extensible parser system with format detection
 - Custom parsers per bank (e.g., `parse-file.ts` contains bank-specific logic)
+- **PDF Import**: Uses Mastra AI agent for extracting transactions from bank statement PDFs
 
 ## TypeScript Guidelines
 
@@ -176,5 +177,139 @@ This is a Yarn workspaces monorepo:
 - Yarn 4.9.1 (specified in packageManager field)
 - Run commands from root directory only
 
+## PDF Import Feature (Experimental)
+
+### Overview
+Actual Budget now supports importing bank statement PDFs using an AI-powered agent built with Mastra framework. This feature currently supports **Santander España** and **Revolut España** bank statements.
+
+### Architecture
+```
+User selects PDF → Actual UI → loot-core (parse-file.ts) →
+pdf-adapter.ts → HTTP POST :5055/extract →
+MASTRA-PDF-IMPORTER/server.ts → Mastra Agent API :4112 →
+pdfExtractorAgent (GPT-4o-mini) → Parsed Transactions →
+Import into Actual Budget
+```
+
+### Setup Requirements
+
+1. **Environment Variables** (`.env` in root directory):
+   ```bash
+   PDF_AGENT_HTTP_URL=http://localhost:5055
+   # Optional: Disable PDF import
+   # ACTUAL_PDF_AGENT_DISABLED=1
+   ```
+
+2. **Mastra PDF Service** (`MASTRA-PDF-IMPORTER/`):
+   - OpenAI API key required (`OPENAI_API_KEY` in `MASTRA-PDF-IMPORTER/.env`)
+   - Start service: `cd MASTRA-PDF-IMPORTER && ./start-pdf-service.sh`
+   - Runs on ports 4112 (Mastra API) and 5055 (HTTP wrapper)
+
+### Development Workflow
+
+#### Starting the PDF Service
+```bash
+cd MASTRA-PDF-IMPORTER
+./start-pdf-service.sh
+# Or manually:
+# Terminal 1: npm run dev (Mastra on :4112)
+# Terminal 2: npm run server (HTTP wrapper on :5055)
+```
+
+#### Starting Actual Budget
+```bash
+# From repo root
+yarn start:browser
+```
+
+### Code Locations
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| Parser registration | `packages/loot-core/src/server/transactions/import/parse-file.ts` | Registers `.pdf` extension |
+| PDF adapter | `packages/loot-core/src/server/transactions/import/pdf-adapter.ts` | HTTP client to Mastra agent |
+| UI file picker | `packages/desktop-client/src/components/modals/ImportTransactionsModal/ImportTransactionsModal.tsx` | Adds `.pdf` to accepted files |
+| Mastra agent | `MASTRA-PDF-IMPORTER/src/mastra/agents/pdf-extractor-agent.ts` | AI agent definition |
+| HTTP wrapper | `MASTRA-PDF-IMPORTER/src/server.ts` | Express server wrapping Mastra API |
+| Santander parser | `MASTRA-PDF-IMPORTER/src/mastra/tools/santander-parser-v2.ts` | Santander España parser |
+| Revolut parser | `MASTRA-PDF-IMPORTER/src/mastra/tools/revolut-parser.ts` | Revolut España parser |
+
+### Supported Banks
+- **Santander España**: Extractos de cuenta corriente (formato estándar)
+- **Revolut**: Statements in EUR, USD, GBP
+
+### Adding Support for New Banks
+
+1. Create a new parser tool in `MASTRA-PDF-IMPORTER/src/mastra/tools/`:
+   ```typescript
+   import { createTool } from '@mastra/core/tools';
+   import { z } from 'zod';
+
+   export const myBankParserTool = createTool({
+     id: 'my-bank-parser',
+     description: 'Parse My Bank PDF statements',
+     inputSchema: z.object({
+       rawText: z.string(),
+     }),
+     outputSchema: z.object({
+       bankName: z.string(),
+       transactions: z.array(z.object({
+         date: z.string(),
+         amount: z.number(),
+         description: z.string(),
+         balance: z.number(),
+       })),
+       totalTransactions: z.number(),
+       success: z.boolean(),
+     }),
+     execute: async ({ context }) => {
+       // Your parsing logic
+     },
+   });
+   ```
+
+2. Register the tool in `MASTRA-PDF-IMPORTER/src/mastra/agents/pdf-extractor-agent.ts`:
+   ```typescript
+   tools: {
+     saveFileTool,
+     pdfReaderTool,
+     santanderParserTool,
+     revolutParserTool,
+     myBankParserTool, // Add here
+   }
+   ```
+
+### Testing
+
+```bash
+# Run PDF adapter tests
+yarn workspace loot-core run test src/server/transactions/import/pdf-adapter.test.ts --watch=false
+```
+
+### Troubleshooting
+
+**Error: "PDF_AGENT_HTTP_URL not configured"**
+- Ensure `.env` exists in root directory with `PDF_AGENT_HTTP_URL=http://localhost:5055`
+
+**Error: "PDF extraction failed"**
+- Check that Mastra service is running: `curl http://localhost:5055`
+- Check that Mastra API is running: `curl http://localhost:4112`
+- Review logs in `MASTRA-PDF-IMPORTER/` (if using the start script, check `/tmp/mastra-*.log`)
+
+**Error: "HTTP 500" from agent**
+- Verify OpenAI API key is configured in `MASTRA-PDF-IMPORTER/.env`
+- Check Mastra logs for details
+
+**No transactions extracted**
+- Verify the PDF is from a supported bank (Santander or Revolut España)
+- The PDF must be a native digital PDF, not a scanned image
+
+### Disabling PDF Import
+
+Set environment variable in `.env`:
+```bash
+ACTUAL_PDF_AGENT_DISABLED=1
+```
+
 ### Custom Workspace: MASTRA-PDF-IMPORTER
-This workspace contains experimental PDF import functionality using AI agents to parse bank statement PDFs. It uses the Mastra framework for agent orchestration.
+This workspace contains the PDF import functionality using AI agents to parse bank statement PDFs. It uses the Mastra framework for agent orchestration. See `MASTRA-PDF-IMPORTER/README-INTEGRATION.md` for detailed setup and usage instructions.

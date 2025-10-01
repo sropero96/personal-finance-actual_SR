@@ -512,7 +512,7 @@ export function ImportTransactionsModal({
       filters: [
         {
           name: 'Financial Files',
-          extensions: ['qif', 'ofx', 'qfx', 'csv', 'tsv', 'xml'],
+          extensions: ['qif', 'ofx', 'qfx', 'csv', 'tsv', 'xml', 'pdf'],
         },
       ],
     });
@@ -1176,6 +1176,10 @@ function getParseOptions(fileType: string, options: ParseFileOptions = {}) {
   if (isCamtFile(fileType)) {
     const { importNotes } = options;
     return { importNotes };
+  }
+  if (fileType === 'pdf') {
+    // PDFs are processed by AI agent, no parse options needed
+    return {};
   }
   const { importNotes } = options;
   return { importNotes };
