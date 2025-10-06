@@ -39,8 +39,8 @@ RUN export NODE_OPTIONS="--max-old-space-size=4096" && \
 # Build sync server
 RUN yarn workspace @actual-app/sync-server build
 
-# Install Anthropic Agent Server dependencies
-RUN cd anthropic-pdf-agent && yarn install
+# Install Anthropic Agent Server dependencies (uses npm, not yarn)
+RUN cd anthropic-pdf-agent && npm ci
 
 # ============================================
 # Stage 2: Production Runtime
