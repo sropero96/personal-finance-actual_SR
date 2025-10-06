@@ -25,8 +25,8 @@ COPY packages/component-library/package.json ./packages/component-library/
 COPY packages/api/package.json ./packages/api/
 COPY anthropic-pdf-agent/package.json ./anthropic-pdf-agent/
 
-# Install dependencies
-RUN yarn install --immutable
+# Install dependencies (allow lockfile updates for build)
+RUN yarn install
 
 # Copy source code
 COPY . .
