@@ -68,27 +68,27 @@ RUN mkdir -p /data && chmod 777 /data
 # Create startup script
 COPY <<'EOF' /app/start.sh
 #!/bin/bash
-set -e
 
 echo "🚀 Starting Actual Budget with Claude AI PDF Importer"
 
 # Start Anthropic Agent Server in background
 echo "📡 Starting Anthropic Agent Server on port 4000..."
-cd /app/anthropic-pdf-agent
-node server.js &
+cd /app/anthropic-pdf-agent || exit 1
+node server.js > /tmp/agent-server.log 2>&1 &
 AGENT_PID=$!
+echo "Agent server started with PID: $AGENT_PID"
+
+# Ensure agent server is killed when script exits
+trap "echo 'Stopping agent server...'; kill $AGENT_PID 2>/dev/null || true" EXIT
 
 # Wait for Agent Server to be ready
 echo "⏳ Waiting for Agent Server..."
-sleep 3
+sleep 5
 
 # Start Actual Budget Sync Server
 echo "💰 Starting Actual Budget Sync Server on port 5006..."
-cd /app/sync-server
+cd /app/sync-server || exit 1
 exec node app.js
-
-# If sync server exits, kill agent server
-trap "kill $AGENT_PID" EXIT
 EOF
 
 RUN chmod +x /app/start.sh
