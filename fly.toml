@@ -7,8 +7,9 @@ primary_region = "iad"
 kill_signal = "SIGINT"
 kill_timeout = 5
 
-# Build configuration - uses your GitHub repo instead of Docker image
+# Build configuration - custom build with Claude AI PDF Importer
 [build]
+  dockerfile = "Dockerfile.production"
 
 # Mount persistent volume for user data
 [mounts]
@@ -19,6 +20,10 @@ kill_timeout = 5
 [env]
   PORT = "5006"
   TINI_SUBREAPER = "1"
+  NODE_ENV = "production"
+
+# Secrets (set with: fly secrets set VITE_ANTHROPIC_API_KEY=sk-ant-...)
+# VITE_ANTHROPIC_API_KEY - required for Claude AI PDF processing
 
 # HTTP service configuration
 [[services]]
