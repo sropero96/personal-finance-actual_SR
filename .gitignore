@@ -56,7 +56,7 @@ bundle.mobile.js.map
 package.tgz
 
 # Fly.io configuration
-fly.toml
+# fly.toml - now tracked for deployment
 
 # TypeScript cache
 build/
