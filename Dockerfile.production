@@ -53,11 +53,16 @@ RUN apt-get update -y && \
     apt-get install -y openssl tini && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy built artifacts from builder
-COPY --from=builder /app/packages/sync-server/build ./sync-server
-COPY --from=builder /app/packages/desktop-client/build ./static
-COPY --from=builder /app/packages/sync-server/node_modules ./sync-server/node_modules
-COPY --from=builder /app/packages/sync-server/package.json ./sync-server/package.json
+# Copy built artifacts from builder - recreate proper structure
+# The sync server expects @actual-app/web to be resolvable
+COPY --from=builder /app/packages/sync-server/build ./packages/sync-server/build
+COPY --from=builder /app/packages/desktop-client/build ./packages/desktop-client/build
+COPY --from=builder /app/packages/sync-server/node_modules ./packages/sync-server/node_modules
+COPY --from=builder /app/packages/sync-server/package.json ./packages/sync-server/package.json
+COPY --from=builder /app/packages/desktop-client/package.json ./packages/desktop-client/package.json
+# Create node_modules symlink for @actual-app/web
+RUN mkdir -p /app/packages/sync-server/node_modules/@actual-app && \
+    ln -s /app/packages/desktop-client /app/packages/sync-server/node_modules/@actual-app/web
 
 # Copy Anthropic Agent Server
 COPY --from=builder /app/anthropic-pdf-agent ./anthropic-pdf-agent
@@ -87,7 +92,7 @@ sleep 5
 
 # Start Actual Budget Sync Server
 echo "💰 Starting Actual Budget Sync Server on port 5006..."
-cd /app/sync-server || exit 1
+cd /app/packages/sync-server/build || exit 1
 exec node app.js
 EOF
 
