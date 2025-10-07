@@ -1,0 +1,59 @@
+# Fly.io deployment configuration for Anthropic Agent Server
+# PDF Processing Agent for Actual Budget
+
+app = "actual-agent-sr"
+primary_region = "iad"
+
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+# Build configuration - lightweight agent server
+[build]
+  dockerfile = "Dockerfile.agent"
+
+# Environment variables
+[env]
+  PORT = "4000"
+  NODE_ENV = "production"
+
+# Secrets (set with: fly secrets set -a actual-agent-sr VITE_ANTHROPIC_API_KEY=sk-ant-...)
+# VITE_ANTHROPIC_API_KEY - required for Claude AI PDF processing
+
+# HTTP service configuration
+[[services]]
+  internal_port = 4000
+  protocol = "tcp"
+  auto_start_machines = true
+  auto_stop_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    restart_limit = 0
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+# Experimental features
+[experimental]
+  auto_rollback = true

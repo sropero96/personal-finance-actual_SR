@@ -6,7 +6,7 @@
  *
  * Flow:
  * 1. Read PDF from virtual filesystem
- * 2. Send PDF to AGENT SERVER (localhost:4000)
+ * 2. Send PDF to AGENT SERVER (via ANTHROPIC_AGENT_URL env var)
  * 3. Agent Server processes with Claude API + Agent tools
  * 4. Returns structured transaction data
  *
@@ -15,6 +15,9 @@
  * - Tools: PDF reader, transaction extractor, payee curator
  * - Logs visible of agent working
  * - Returns curated JSON
+ *
+ * Environment Variables:
+ * - ANTHROPIC_AGENT_URL: URL of agent server (defaults to http://localhost:4000)
  */
 
 import { logger } from '../../../platform/server/log';
@@ -42,11 +45,14 @@ export type ClaudePDFResponse = {
 /**
  * Process PDF with Anthropic Agent Server
  *
- * Sends PDF to local Agent Server which uses Claude API with agent tools
+ * Sends PDF to Agent Server which uses Claude API with agent tools
  */
 export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFResponse> {
+  // Get agent server URL from environment or use localhost for development
+  const agentServerUrl = process.env.ANTHROPIC_AGENT_URL || 'http://localhost:4000';
+
   logger.info('[Claude PDF Processor] Starting AGENT-based PDF processing:', filepath);
-  logger.info('[Claude PDF Processor] Agent Server: http://localhost:4000');
+  logger.info('[Claude PDF Processor] Agent Server:', agentServerUrl);
 
   try {
     // Step 1: Read PDF file as binary
@@ -79,7 +85,7 @@ export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFR
     logger.info('[Claude PDF Processor] FormData prepared, sending to Agent Server...');
 
     // Step 3: Send to Agent Server
-    const response = await fetch('http://localhost:4000/api/process-pdf', {
+    const response = await fetch(`${agentServerUrl}/api/process-pdf`, {
       method: 'POST',
       body: formData,
     });

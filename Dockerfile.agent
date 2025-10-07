@@ -1,0 +1,34 @@
+# ============================================
+# Anthropic PDF Agent Server - Standalone
+# ============================================
+
+FROM node:20-bullseye-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update -y && \
+    apt-get install -y tini && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy agent server code
+COPY anthropic-pdf-agent/package.json anthropic-pdf-agent/package-lock.json ./
+RUN npm ci --only=production
+
+COPY anthropic-pdf-agent/ ./
+
+# Create uploads directory
+RUN mkdir -p uploads && chmod 777 uploads
+
+# Expose agent port
+EXPOSE 4000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD node -e "require('http').get('http://localhost:4000/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+
+# Use tini to handle signals
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Start agent server
+CMD ["node", "server.js"]
