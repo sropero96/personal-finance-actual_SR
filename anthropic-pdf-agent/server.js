@@ -238,7 +238,7 @@ IMPORTANT: Return ONLY the JSON object. No explanations, no markdown.`;
 
     const message = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 8192,
+      max_tokens: 16384, // Increased from 8192 to handle statements with many transactions
       temperature: 0,
       messages: [{
         role: 'user',
@@ -261,11 +261,20 @@ IMPORTANT: Return ONLY the JSON object. No explanations, no markdown.`;
 
     console.log('✅ [Agent] Received response from Claude');
     console.log(`📊 [Agent] Response type: ${message.content[0].type}`);
+    console.log(`🔢 [Agent] Stop reason: ${message.stop_reason}`);
+    console.log(`📊 [Agent] Input tokens: ${message.usage.input_tokens}`);
+    console.log(`📊 [Agent] Output tokens: ${message.usage.output_tokens}`);
 
     // Parse agent response
     const responseText = message.content[0].text;
     console.log(`📝 [Agent] Response length: ${responseText.length} chars`);
     console.log(`📄 [Agent] Response preview: ${responseText.substring(0, 200)}...`);
+
+    // Warn if response was truncated
+    if (message.stop_reason === 'max_tokens') {
+      console.warn('⚠️  [Agent] WARNING: Response was truncated due to max_tokens limit!');
+      console.warn('⚠️  [Agent] Some transactions may be missing. Consider increasing max_tokens.');
+    }
 
     // Clean and parse JSON
     let cleanedText = responseText.trim();
