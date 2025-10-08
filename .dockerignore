@@ -8,7 +8,8 @@
 .gitattributes
 
 # Agent server (not needed for Actual Budget build)
-anthropic-pdf-agent/
+# NOTE: Cannot exclude this as it breaks agent deployment (both builds share same .dockerignore)
+# anthropic-pdf-agent/
 
 # Development & testing
 **/__tests__
