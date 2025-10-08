@@ -1,3 +1,61 @@
+# ========================================
+# CRITICAL EXCLUSIONS (reduce from 214MB to <50MB)
+# ========================================
+
+# Git repository (can be 50-100MB+)
+.git
+.gitignore
+.gitattributes
+
+# Agent server (not needed for Actual Budget build)
+anthropic-pdf-agent/
+
+# Development & testing
+**/__tests__
+**/__mocks__
+**/test
+**/tests
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.spec.ts
+**/*.spec.tsx
+**/*.spec.js
+**/coverage
+**/test-results
+**/playwright-report
+
+# Documentation
+*.md
+!README.md
+docs/
+CONTRIBUTING.md
+CHANGELOG.md
+LICENSE
+
+# Development configs
+.eslintrc*
+.prettierrc*
+.editorconfig
+jest.config.*
+vitest.config.*
+playwright.config.*
+
+# Fly.io configs (keep only fly.actual.toml)
+fly.toml
+fly.agent.toml
+fly.*.toml
+!fly.actual.toml
+Dockerfile*
+!Dockerfile.actual
+
+# Temporary & cache
+.tmp
+.cache
+*.log
+*.tsbuildinfo
+.turbo
+
 # flyctl launch added from .gitignore
 # Sample Data
 data/*

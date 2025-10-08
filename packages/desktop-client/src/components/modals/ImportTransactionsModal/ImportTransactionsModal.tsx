@@ -253,11 +253,11 @@ export function ImportTransactionsModal({
               trans.date || '(empty)'
             } with given date format`,
           );
-          break;
+          continue; // Skip this transaction and continue with the rest
         }
         if (trans.payee_name == null || typeof trans.payee_name !== 'string') {
           console.log(`Unable·to·parse·payee·${trans.payee_name || '(empty)'}`);
-          break;
+          continue; // Skip this transaction and continue with the rest
         }
 
         const { amount } = parseAmountFields(
@@ -270,7 +270,7 @@ export function ImportTransactionsModal({
         );
         if (amount == null) {
           console.log(`Transaction on ${trans.date} has no amount`);
-          break;
+          continue; // Skip this transaction and continue with the rest
         }
 
         const category_id = parseCategoryFields(trans, categories.list);

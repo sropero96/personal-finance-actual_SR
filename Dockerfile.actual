@@ -50,12 +50,21 @@ RUN apt-get update -y && \
     apt-get install -y openssl tini && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy built artifacts - recreate proper structure
+# Copy package.json files for proper module resolution
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/packages/sync-server/package.json ./packages/sync-server/
+COPY --from=builder /app/packages/desktop-client/package.json ./packages/desktop-client/
+COPY --from=builder /app/packages/crdt/package.json ./packages/crdt/
+
+# Copy root node_modules (includes hoisted packages like 'migrate')
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy workspace node_modules (only if they exist)
+COPY --from=builder /app/packages/sync-server/node_modules ./packages/sync-server/node_modules
+
+# Copy built artifacts
 COPY --from=builder /app/packages/sync-server/build ./packages/sync-server/build
 COPY --from=builder /app/packages/desktop-client/build ./packages/desktop-client/build
-COPY --from=builder /app/packages/sync-server/node_modules ./packages/sync-server/node_modules
-COPY --from=builder /app/packages/sync-server/package.json ./packages/sync-server/package.json
-COPY --from=builder /app/packages/desktop-client/package.json ./packages/desktop-client/package.json
 
 # Create node_modules symlink for @actual-app/web
 RUN mkdir -p /app/packages/sync-server/node_modules/@actual-app && \
@@ -74,5 +83,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
 # Use tini to handle signals
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-# Start sync server
-CMD ["node", "/app/packages/sync-server/build/app.js"]
+# Start sync server from root directory for proper module resolution
+WORKDIR /app
+CMD ["node", "packages/sync-server/build/app.js"]

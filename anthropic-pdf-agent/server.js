@@ -173,15 +173,21 @@ app.post('/api/process-pdf', upload.single('pdf'), async (req, res) => {
 
 I've attached a PDF bank statement from either Santander España or Revolut España.
 
+⚠️ CRITICAL: This PDF may contain 10-100 transactions across multiple pages. You MUST process the ENTIRE document from the first page to the last page without stopping early.
+
 Your task is to:
 
 1. **READ THE PDF DOCUMENT COMPLETELY**
+   - Process EVERY SINGLE PAGE from start to finish
+   - Do not stop until you reach the end of the document
    - Extract all text from every page
    - Identify which bank this is from (Santander or Revolut)
    - Find the account number if present
 
 2. **EXTRACT ALL TRANSACTIONS**
-   - Find every single transaction in the document
+   - Find EVERY SINGLE transaction in the ENTIRE document
+   - Do not stop after the first page or first 20-30 transactions
+   - Continue processing until you have extracted ALL transactions from ALL pages
    - For each transaction extract:
      * Date (in YYYY-MM-DD format)
      * Raw description (full text)
@@ -201,44 +207,36 @@ Your task is to:
        → Payee: "Loomisp, Madrid"
 
    **Notes Field:**
-   - Keep the FULL original transaction description
-   - Remove "Fecha valor:" prefix but keep everything else
+   - Keep FULL original description (without "Fecha valor:" prefix)
 
-   **Category Suggestion:**
-   - Intelligently suggest category based on merchant name
-   - Categories: Restaurants, Groceries, Transportation, Shopping, Utilities,
-     Healthcare, Entertainment, Transfer, Income, General
+4. **RETURN COMPACT JSON**
 
-4. **RETURN STRUCTURED JSON**
+**CRITICAL:** Use COMPACT JSON format (minimize whitespace) to fit 100+ transactions within token limits.
 
-Return ONLY valid JSON (no markdown, no code blocks) with this EXACT structure:
+Return ONLY valid JSON (no markdown, no code blocks):
 
-{
-  "bankName": "Santander España" or "Revolut",
-  "accountNumber": "ES2400497175032810076563" (if found),
-  "transactions": [
-    {
-      "date": "2025-07-17",
-      "payee": "La Mina, Madrid",
-      "notes": "Pago Movil En La Mina, Madrid",
-      "category": "Restaurants",
-      "amount": -41.80,
-      "confidence": 0.95
-    }
-  ],
-  "totalTransactionsFound": 28,
-  "extractionComplete": true,
-  "success": true
-}
+{"bankName":"Santander España","accountNumber":"ES24...","transactions":[{"date":"2025-07-17","payee":"La Mina, Madrid","notes":"Pago Movil En La Mina, Madrid","amount":-41.80,"confidence":0.95}],"totalTransactionsFound":51,"pagesProcessed":3,"extractionComplete":true,"success":true}
 
-IMPORTANT: Return ONLY the JSON object. No explanations, no markdown.`;
+**FORMAT RULES:**
+- NO spaces after colons or commas
+- NO line breaks
+- Keep notes CONCISE but informative
+- For 50+ transactions, prioritize completeness over verbose notes
 
-    // Call Claude API with document attachment (agent-like approach)
-    console.log('🤖 [Agent] Sending PDF to Claude API with agent prompt...');
+⚠️ BEFORE RETURNING: Verify you processed ALL pages and ALL transactions.
 
-    const message = await anthropic.messages.create({
+IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no code blocks.`;
+
+    // Call Claude API with streaming for large responses
+    console.log('🤖 [Agent] Sending PDF to Claude API with agent prompt (streaming mode)...');
+
+    let responseText = '';
+    let stopReason = '';
+    let usage = { input_tokens: 0, output_tokens: 0 };
+
+    const stream = await anthropic.messages.stream({
       model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 16384, // Increased from 8192 to handle statements with many transactions
+      max_tokens: 8192, // Maximum allowed for this model (supports 100+ transactions with compact format)
       temperature: 0,
       messages: [{
         role: 'user',
@@ -259,21 +257,41 @@ IMPORTANT: Return ONLY the JSON object. No explanations, no markdown.`;
       }],
     });
 
+    // Collect streamed response
+    for await (const chunk of stream) {
+      if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+        responseText += chunk.delta.text;
+      } else if (chunk.type === 'message_stop') {
+        stopReason = 'end_turn';
+      } else if (chunk.type === 'message_delta') {
+        stopReason = chunk.delta?.stop_reason || stopReason;
+        if (chunk.usage) {
+          usage.output_tokens = chunk.usage.output_tokens || 0;
+        }
+      }
+    }
+
+    // Get final message for full usage stats
+    const finalMessage = await stream.finalMessage();
+    if (finalMessage.usage) {
+      usage = finalMessage.usage;
+    }
+
     console.log('✅ [Agent] Received response from Claude');
-    console.log(`📊 [Agent] Response type: ${message.content[0].type}`);
-    console.log(`🔢 [Agent] Stop reason: ${message.stop_reason}`);
-    console.log(`📊 [Agent] Input tokens: ${message.usage.input_tokens}`);
-    console.log(`📊 [Agent] Output tokens: ${message.usage.output_tokens}`);
+    console.log(`📊 [Agent] Response type: text (streamed)`);
+    console.log(`🔢 [Agent] Stop reason: ${stopReason}`);
+    console.log(`📊 [Agent] Input tokens: ${usage.input_tokens}`);
+    console.log(`📊 [Agent] Output tokens: ${usage.output_tokens}`);
 
     // Parse agent response
-    const responseText = message.content[0].text;
     console.log(`📝 [Agent] Response length: ${responseText.length} chars`);
     console.log(`📄 [Agent] Response preview: ${responseText.substring(0, 200)}...`);
 
     // Warn if response was truncated
-    if (message.stop_reason === 'max_tokens') {
-      console.warn('⚠️  [Agent] WARNING: Response was truncated due to max_tokens limit!');
-      console.warn('⚠️  [Agent] Some transactions may be missing. Consider increasing max_tokens.');
+    if (stopReason === 'max_tokens') {
+      console.error('❌ [Agent] CRITICAL: Response was TRUNCATED! Hit max_tokens limit (8192)');
+      console.error('❌ [Agent] This PDF has TOO MANY transactions for single-pass processing');
+      console.error('💡 [Agent] Solution: The response will be incomplete. User should split PDF or reduce transaction count.');
     }
 
     // Clean and parse JSON
