@@ -185,11 +185,11 @@ This is a Yarn workspaces monorepo:
 This repository includes an **AI-powered PDF bank statement import system** for Spanish banks (Santander España and Revolut España). The system uses Anthropic's Claude AI via an Agent Server architecture to:
 
 - ✅ Read PDF bank statements natively (no text extraction needed)
-- ✅ Extract ALL transactions with high accuracy
+- ✅ Extract ALL transactions with high accuracy (10-100 transactions per PDF)
 - ✅ **Curate Payee names intelligently** (e.g., "La Mina, Madrid" vs raw bank descriptions)
-- ✅ **Suggest Categories** based on merchant analysis (Restaurants, Groceries, Transportation, etc.)
 - ✅ Validate completeness and provide confidence scores
 - ✅ Work seamlessly in **browser** (web version)
+- ✅ Deployed in production on Fly.io
 
 ### Architecture: Anthropic Agent Server Pattern
 
@@ -206,6 +206,11 @@ Following [Anthropic's Agent Architecture](https://www.anthropic.com/engineering
                                  ▼                              ▼
                         FormData Upload                Document Attachment
                         Multer Handler                 PDF Processing
+
+Production URLs:
+- Actual Budget: https://actual-budget-sr.fly.dev
+- Agent Server: https://actual-agent-sr.fly.dev
+- Local development: http://localhost:4000 (agent), http://localhost:3001 (actual)
 ```
 
 **Why this architecture?**
@@ -290,7 +295,6 @@ yarn start  # or yarn dev for development
          "date": "2025-07-17",
          "payee": "La Mina, Madrid",        // ✨ CURATED
          "notes": "Pago Movil En La Mina, Madrid",
-         "category": "Restaurants",         // ✨ SUGGESTED
          "amount": -41.80,
          "confidence": 0.95
        }
@@ -316,23 +320,14 @@ Claude Agent intelligently extracts merchant names:
 | `Compra Loomisp*campo Del Moro, Madrid, Tarjeta 123` | `Loomisp, Madrid` |
 | `Transferencia desde Juan Pérez` | `Juan Pérez` |
 
-### Category Suggestions
-
-Based on merchant analysis:
-- Restaurants (La Mina, City Wok, etc.)
-- Groceries (Mercadona, Carrefour, etc.)
-- Transportation (Metro, Uber, etc.)
-- Shopping (Zara, Amazon, etc.)
-- Utilities (Iberdrola, Movistar, etc.)
-- Healthcare (Farmacia, Clínica, etc.)
-- Entertainment (Netflix, Spotify, etc.)
-- Transfer (person-to-person)
-- Income (salary, refunds)
-- General (unknown)
-
 ### Environment Setup
 
-**Required:**
+**Production (Fly.io):**
+- Actual Budget: https://actual-budget-sr.fly.dev (297 MB)
+- Agent Server: https://actual-agent-sr.fly.dev (76 MB)
+- API Key configured via Fly.io secrets
+
+**Local Development:**
 1. Anthropic API key in `.env`:
    ```bash
    VITE_ANTHROPIC_API_KEY=sk-ant-api03-...
@@ -341,12 +336,12 @@ Based on merchant analysis:
 2. Start Agent Server:
    ```bash
    cd anthropic-pdf-agent
-   yarn start
+   yarn start  # Runs on http://localhost:4000
    ```
 
 3. Start Actual Budget:
    ```bash
-   yarn start:browser  # From root directory
+   yarn start:browser  # From root directory, runs on http://localhost:3001
    ```
 
 ### Supported Banks
@@ -354,6 +349,13 @@ Based on merchant analysis:
 Currently configured for:
 - **Santander España** - Full transaction extraction with location-based payee curation
 - **Revolut España** - International merchant names, multi-currency support
+
+### Processing Capacity
+
+- **Transactions per PDF**: 10-100 (tested up to 99 transactions)
+- **PDF size limit**: 10 MB
+- **Processing time**: 15-45 seconds depending on pages
+- **Token optimization**: Compact JSON format to fit 100+ transactions in 8192 token limit
 
 ### Troubleshooting
 

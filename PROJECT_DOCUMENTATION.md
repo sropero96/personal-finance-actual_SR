@@ -334,16 +334,9 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
     Output: "Loomisp, Madrid"
     ```
 
-11. **Claude AI - Sugerencia de Categorías**:
-    ```
-    "La Mina, Madrid" → "Restaurant"
-    "Carrefour Express" → "Groceries"
-    "Metro Madrid" → "Transport"
-    ```
-
-12. **Claude AI - JSON compacto** (minimizado para caber en 8192 tokens):
+11. **Claude AI - JSON compacto** (minimizado para caber en 8192 tokens):
     ```json
-    {"bankName":"Santander España","accountNumber":"ES24...","transactions":[{"date":"2025-07-17","payee":"La Mina, Madrid","notes":"Pago Movil En La Mina, Madrid","category":"Restaurant","amount":-41.80,"confidence":0.95},...],"totalTransactionsFound":51,"pagesProcessed":3,"extractionComplete":true,"success":true}
+    {"bankName":"Santander España","accountNumber":"ES24...","transactions":[{"date":"2025-07-17","payee":"La Mina, Madrid","notes":"Pago Movil En La Mina, Madrid","amount":-41.80,"confidence":0.95},...],"totalTransactionsFound":51,"pagesProcessed":3,"extractionComplete":true,"success":true}
     ```
 
 #### **Fase 5: Validación y Display**
@@ -624,18 +617,19 @@ Your task is to:
    **Notes Field:**
    - Keep FULL original description (without "Fecha valor:" prefix)
 
+   Note: Category suggestions were removed from the agent prompt as they didn't match user's Actual Budget categories.
+
 4. **RETURN COMPACT JSON**
 
 **CRITICAL:** Use COMPACT JSON format (minimize whitespace) to fit 100+ transactions within token limits.
 
 Return ONLY valid JSON (no markdown, no code blocks):
 
-{"bankName":"Santander España","accountNumber":"ES24...","transactions":[{"date":"2025-07-17","payee":"La Mina, Madrid","notes":"Pago Movil En La Mina, Madrid","category":"Restaurant","amount":-41.80,"confidence":0.95}],"totalTransactionsFound":51,"pagesProcessed":3,"extractionComplete":true,"success":true}
+{"bankName":"Santander España","accountNumber":"ES24...","transactions":[{"date":"2025-07-17","payee":"La Mina, Madrid","notes":"Pago Movil En La Mina, Madrid","amount":-41.80,"confidence":0.95}],"totalTransactionsFound":51,"pagesProcessed":3,"extractionComplete":true,"success":true}
 
 **FORMAT RULES:**
 - NO spaces after colons or commas
 - NO line breaks
-- Use SHORT category names (Restaurant not Restaurants)
 - Keep notes CONCISE but informative
 - For 50+ transactions, prioritize completeness over verbose notes
 
@@ -727,7 +721,6 @@ try {
       "date": "2025-07-17",
       "payee": "La Mina, Madrid",
       "notes": "Pago Movil En La Mina, Madrid",
-      "category": "Restaurant",
       "amount": -41.80,
       "confidence": 0.95
     },
@@ -735,7 +728,6 @@ try {
       "date": "2025-07-18",
       "payee": "Metro Madrid",
       "notes": "Transporte Metro Linea 5",
-      "category": "Transport",
       "amount": -2.50,
       "confidence": 0.98
     }
@@ -868,13 +860,7 @@ output tokens for claude-3-5-sonnet-20241022
    DESPUÉS: {"date":"2025-07-17","payee":"La Mina, Madrid"}
    ```
 
-3. **Categorías cortas**:
-   ```
-   ANTES: "Restaurants and Dining"
-   DESPUÉS: "Restaurant"
-   ```
-
-4. **Notas concisas**:
+3. **Notas concisas**:
    ```
    ANTES: "Pago realizado con tarjeta de crédito en La Mina, Madrid el 17/07/2025"
    DESPUÉS: "Pago Movil En La Mina, Madrid"
@@ -887,7 +873,7 @@ output tokens for claude-3-5-sonnet-20241022
 - ~500 tokens de overhead (estructura JSON, campos fijos)
 = 7692 tokens para transacciones
 
-7692 / 70 tokens por transacción ≈ 110 transacciones
+7692 / 60 tokens por transacción (compacto, sin categorías) ≈ 128 transacciones
 
 ✅ Soporta 100+ transacciones con JSON compacto
 ```

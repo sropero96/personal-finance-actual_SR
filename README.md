@@ -2,7 +2,34 @@
   <img src="/demo.png" alt="Actualbudget" />
 </p>
 
-## Getting Started
+# Actual Budget - Custom Fork with AI-Powered PDF Import
+
+> **This is a customized fork of Actual Budget** with added functionality for importing bank statement PDFs using Claude AI.
+>
+> **Author:** Sebastian Ropero (sebastian.ropero96@gmail.com)
+> **Production:** https://actual-budget-sr.fly.dev
+
+## 🆕 New Features in This Fork
+
+### AI-Powered PDF Bank Statement Import
+
+Import transactions directly from Spanish bank PDFs (Santander, Revolut) using Claude AI:
+- ✅ Upload PDF → Get 10-100 transactions automatically extracted
+- ✅ Intelligent payee name curation (e.g., "La Mina, Madrid")
+- ✅ Works in browser - no CSV export needed
+- ✅ Processes multi-page PDFs with high accuracy
+- ✅ Deployed on Fly.io with split architecture (Actual Budget + AI Agent Server)
+
+**Architecture:** Two-app deployment on Fly.io:
+- `actual-budget-sr.fly.dev` - Main Actual Budget app (297 MB)
+- `actual-agent-sr.fly.dev` - Dedicated AI processing server (76 MB)
+
+📚 **Full technical documentation:** [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)
+🛠️ **Developer guide:** [CLAUDE.md](./CLAUDE.md)
+
+---
+
+## About Actual Budget (Original)
 
 Actual is a local-first personal finance tool. It is 100% free and open-source, written in NodeJS, it has a synchronization element so that all your changes can move between devices without any heavy lifting.
 
