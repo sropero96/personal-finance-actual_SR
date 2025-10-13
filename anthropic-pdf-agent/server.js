@@ -340,6 +340,308 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
 });
 
 // Health check endpoint
+/**
+ * ============================================
+ * AGENT 2: CATEGORY SUGGESTER
+ * ============================================
+ * Suggests categories for transactions based on:
+ * - User's existing categories
+ * - Historical transaction patterns
+ * - Active categorization rules
+ * - Claude AI inference (when needed)
+ */
+
+const { buildCategorizationPrompt } = require('./categorization/prompt');
+const { deduplicateAndSort, findMatchingRule, extractKeywords } = require('./categorization/search');
+
+app.post('/api/suggest-categories', express.json(), async (req, res) => {
+  const startTime = Date.now();
+  console.log('\n🎯 [Agent 2] New categorization request received');
+
+  try {
+    const {
+      transactions,
+      accountId,
+      categories,      // NEW: Frontend can send categories directly
+      rules,           // NEW: Frontend can send rules directly
+      historicalTransactions,  // NEW: Frontend can send historical data
+      actualBudgetUrl  // LEGACY: For backwards compatibility
+    } = req.body;
+
+    if (!transactions || !Array.isArray(transactions)) {
+      return res.status(400).json({ error: 'transactions array is required' });
+    }
+
+    console.log(`📊 [Agent 2] Processing ${transactions.length} transactions`);
+
+    // Step 1: Get user context (from request or fetch from server)
+    console.log('🔍 [Agent 2] Step 1: Loading user context...');
+
+    let userCategories, activeRules;
+
+    if (categories && rules) {
+      // Data provided directly by frontend (PREFERRED)
+      userCategories = categories;
+      activeRules = rules;
+      console.log(`✅ [Agent 2] Using categories and rules from frontend`);
+    } else {
+      // LEGACY: Fetch from Actual Budget server (requires APIs to exist)
+      console.log(`⚠️  [Agent 2] LEGACY MODE: Fetching from server (deprecated)`);
+
+      if (!accountId || !actualBudgetUrl) {
+        return res.status(400).json({
+          error: 'When not providing categories/rules directly, accountId and actualBudgetUrl are required'
+        });
+      }
+
+      const baseUrl = actualBudgetUrl;
+      const [categoriesRes, rulesRes] = await Promise.all([
+        fetch(`${baseUrl}/api/categories/${accountId}`),
+        fetch(`${baseUrl}/api/rules/${accountId}`),
+      ]);
+
+      if (!categoriesRes.ok || !rulesRes.ok) {
+        throw new Error('Failed to fetch user data from Actual Budget');
+      }
+
+      const categoriesData = await categoriesRes.json();
+      const rulesData = await rulesRes.json();
+      userCategories = categoriesData.categories;
+      activeRules = rulesData.rules;
+    }
+
+    console.log(`✅ [Agent 2] Loaded ${userCategories.length} categories, ${activeRules.length} rules`);
+
+    // Step 2: Group transactions by unique payee
+    console.log('🔍 [Agent 2] Step 2: Grouping transactions by payee...');
+
+    const groupedByPayee = {};
+    transactions.forEach(tx => {
+      const payee = tx.payee_name || tx.payee || 'Unknown';
+      if (!groupedByPayee[payee]) {
+        groupedByPayee[payee] = [];
+      }
+      groupedByPayee[payee].push(tx);
+    });
+
+    const uniquePayees = Object.keys(groupedByPayee);
+    console.log(`✅ [Agent 2] Found ${uniquePayees.length} unique payees`);
+
+    // Step 3: Build payee context from historical data
+    console.log('🔍 [Agent 2] Step 3: Building historical context...');
+
+    const payeeContext = {};
+
+    if (historicalTransactions && Array.isArray(historicalTransactions)) {
+      // Data provided directly by frontend (PREFERRED)
+      console.log(`✅ [Agent 2] Using ${historicalTransactions.length} historical transactions from frontend`);
+
+      // Group historical transactions by payee
+      for (const payee of uniquePayees) {
+        const payeeLower = payee.toLowerCase();
+
+        // Find all historical transactions for this payee (exact and fuzzy match)
+        const matches = historicalTransactions.filter(tx => {
+          const historicalPayee = (tx.payeeName || tx.payee || '').toLowerCase();
+
+          // Exact match
+          if (historicalPayee === payeeLower) return true;
+
+          // Fuzzy match: check if keywords overlap
+          const keywords1 = extractKeywords(payee);
+          const keywords2 = extractKeywords(historicalPayee);
+          const overlap = keywords1.filter(k => keywords2.includes(k)).length;
+
+          return overlap >= Math.min(keywords1.length, keywords2.length) / 2;
+        });
+
+        payeeContext[payee] = deduplicateAndSort(matches);
+
+        if (matches.length > 0) {
+          console.log(`  ✅ Found ${matches.length} historical transactions for "${payee}"`);
+        }
+      }
+
+    } else {
+      // LEGACY: Fetch from Actual Budget server (requires APIs to exist)
+      console.log(`⚠️  [Agent 2] LEGACY MODE: Fetching historical data from server (deprecated)`);
+
+      if (!accountId || !actualBudgetUrl) {
+        console.log(`  ⚠️  Missing accountId or actualBudgetUrl, skipping historical search`);
+      } else {
+        const baseUrl = actualBudgetUrl;
+
+        for (const payee of uniquePayees) {
+          try {
+            // Try exact match first
+            const exactUrl = `${baseUrl}/api/transactions/search?accountId=${accountId}&payee=${encodeURIComponent(payee)}&limit=20`;
+            const exactRes = await fetch(exactUrl);
+
+            if (exactRes.ok) {
+              const { transactions: exactMatches } = await exactRes.json();
+              if (exactMatches.length >= 5) {
+                payeeContext[payee] = deduplicateAndSort(exactMatches);
+                console.log(`  ✅ Exact match for "${payee}": ${exactMatches.length} transactions`);
+                continue;
+              }
+            }
+
+            // Fallback to fuzzy search
+            const fuzzyUrl = `${baseUrl}/api/transactions/search?accountId=${accountId}&payee=${encodeURIComponent(payee)}&fuzzy=true&limit=20`;
+            const fuzzyRes = await fetch(fuzzyUrl);
+
+            if (fuzzyRes.ok) {
+              const { transactions: fuzzyMatches } = await fuzzyRes.json();
+              payeeContext[payee] = deduplicateAndSort(fuzzyMatches);
+              console.log(`  🔍 Fuzzy match for "${payee}": ${fuzzyMatches.length} transactions`);
+            } else {
+              payeeContext[payee] = [];
+              console.log(`  ❌ No matches for "${payee}"`);
+            }
+          } catch (error) {
+            console.error(`  ❌ Error fetching history for "${payee}":`, error.message);
+            payeeContext[payee] = [];
+          }
+        }
+      }
+    }
+
+    console.log(`✅ [Agent 2] Built context for ${Object.keys(payeeContext).length} payees`);
+
+    // Step 4: Categorize each transaction
+    console.log('🔍 [Agent 2] Step 4: Categorizing transactions...');
+
+    const suggestions = [];
+    let claudeCallsCount = 0;
+
+    for (const transaction of transactions) {
+      const payee = transaction.payee_name || transaction.payee || 'Unknown';
+      const historicalData = payeeContext[payee] || [];
+
+      // Check if a rule matches first (highest priority)
+      const ruleMatch = findMatchingRule(transaction, activeRules);
+
+      if (ruleMatch.matched) {
+        const category = userCategories.find(c => c.id === ruleMatch.categoryId);
+        suggestions.push({
+          transaction_id: transaction.id,
+          category: category?.name || null,
+          categoryId: ruleMatch.categoryId,
+          confidence: 0.98,
+          reasoning: 'Matches active categorization rule',
+          source: 'rule',
+        });
+        console.log(`  🎯 Rule match for "${payee}": ${category?.name}`);
+        continue;
+      }
+
+      // Auto-categorize if we have strong historical signal
+      if (historicalData.length > 0) {
+        const topCategory = historicalData[0]; // Already sorted by frequency + recency
+
+        if (topCategory.frequency >= 3) {
+          suggestions.push({
+            transaction_id: transaction.id,
+            category: topCategory.categoryName,
+            categoryId: topCategory.category,
+            confidence: 0.95,
+            reasoning: `Used ${topCategory.frequency} times historically for similar transactions`,
+            source: 'history',
+          });
+          console.log(`  📊 Auto-categorized "${payee}": ${topCategory.categoryName} (freq: ${topCategory.frequency})`);
+          continue;
+        }
+      }
+
+      // Call Claude for uncertain cases
+      console.log(`  🤖 Calling Claude for "${payee}"...`);
+      claudeCallsCount++;
+
+      const promptResult = buildCategorizationPrompt({
+        transaction,
+        userCategories,
+        activeRules,
+        similarTransactions: historicalData.flatMap(h => h.examples || []),
+      });
+
+      if (promptResult.skipClaude) {
+        suggestions.push({
+          transaction_id: transaction.id,
+          ...promptResult.result,
+          source: 'rule-prompt-check',
+        });
+        continue;
+      }
+
+      try {
+        const message = await anthropic.messages.create({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          temperature: 0,
+          messages: [{
+            role: 'user',
+            content: promptResult.prompt,
+          }],
+        });
+
+        const responseText = message.content[0].text;
+        console.log(`  📝 Claude response: ${responseText.substring(0, 100)}...`);
+
+        // Parse Claude's JSON response
+        const claudeResult = JSON.parse(responseText);
+
+        // Map category name to ID
+        const category = userCategories.find(c => c.name === claudeResult.category);
+
+        suggestions.push({
+          transaction_id: transaction.id,
+          category: claudeResult.category,
+          categoryId: category?.id || null,
+          confidence: claudeResult.confidence,
+          reasoning: claudeResult.reasoning,
+          source: 'claude',
+        });
+
+        console.log(`  ✅ Claude suggested: ${claudeResult.category} (${claudeResult.confidence})`);
+
+      } catch (error) {
+        console.error(`  ❌ Claude error for "${payee}":`, error.message);
+        suggestions.push({
+          transaction_id: transaction.id,
+          category: null,
+          categoryId: null,
+          confidence: 0,
+          reasoning: 'AI categorization failed',
+          source: 'error',
+        });
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`\n✅ [Agent 2] Categorization complete!`);
+    console.log(`   - Total suggestions: ${suggestions.length}`);
+    console.log(`   - Claude API calls: ${claudeCallsCount}`);
+    console.log(`   - Duration: ${duration}ms`);
+
+    res.json({
+      success: true,
+      suggestions,
+      stats: {
+        total: suggestions.length,
+        claudeCalls: claudeCallsCount,
+        durationMs: duration,
+      },
+    });
+
+  } catch (error) {
+    console.error('\n❌ [Agent 2] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -351,6 +653,7 @@ app.get('/health', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`\n🚀 Anthropic Agent Server running on http://localhost:${PORT}`);
-  console.log(`📡 Endpoint: POST http://localhost:${PORT}/api/process-pdf`);
+  console.log(`📡 Agent 1 (PDF Parser): POST http://localhost:${PORT}/api/process-pdf`);
+  console.log(`🎯 Agent 2 (Categorizer): POST http://localhost:${PORT}/api/suggest-categories`);
   console.log(`🏥 Health check: GET http://localhost:${PORT}/health\n`);
 });
