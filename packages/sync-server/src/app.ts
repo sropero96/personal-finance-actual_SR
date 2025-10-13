@@ -9,7 +9,6 @@ import rateLimit from 'express-rate-limit';
 import { bootstrap } from './account-db.js';
 import * as accountApp from './app-account.js';
 import * as adminApp from './app-admin.js';
-import * as categorizationApp from './app-categorization.js';
 import * as goCardlessApp from './app-gocardless/app-gocardless.js';
 import * as openidApp from './app-openid.js';
 import * as pluggai from './app-pluggyai/app-pluggyai.js';
@@ -63,9 +62,6 @@ app.use('/secret', secretApp.handlers);
 
 app.use('/admin', adminApp.handlers);
 app.use('/openid', openidApp.handlers);
-
-// Phase 2: Categorization API for Agent 2
-app.use('/api', categorizationApp.handlers);
 
 app.get('/mode', (req, res) => {
   res.send(config.get('mode'));
