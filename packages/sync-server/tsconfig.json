@@ -1,12 +1,14 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    // DOM for URL global in Node 16+
-    "lib": ["ES2021"],
+    // DOM for URL global in Node 16+ and browser type definitions for loot-core
+    "lib": ["ES2021", "DOM"],
     "module": "node16",
     "moduleResolution": "node16",
     "noEmit": false,
-    "outDir": "build"
+    "noEmitOnError": false,
+    "outDir": "build",
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*",
