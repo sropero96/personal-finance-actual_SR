@@ -35,11 +35,8 @@ RUN export NODE_OPTIONS="--max-old-space-size=4096" && \
     yarn workspace loot-core build:browser && \
     yarn workspace @actual-app/web build:browser
 
-# Build sync server (ignore exit code but verify files generated)
-RUN yarn workspace @actual-app/sync-server build || true && \
-    rm -rf packages/sync-server/build/loot-core/src/server/api && \
-    ls -laR packages/sync-server/build/ && \
-    mkdir -p packages/sync-server/build/src && \
+# Build sync server and copy SQL files
+RUN yarn workspace @actual-app/sync-server build && \
     cp -r packages/sync-server/src/sql packages/sync-server/build/src/sql
 
 # ============================================
@@ -88,4 +85,4 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Start sync server from root directory for proper module resolution
 WORKDIR /app
-CMD ["node", "packages/sync-server/build/sync-server/src/app.js"]
+CMD ["node", "packages/sync-server/build/app.js"]
