@@ -36,6 +36,9 @@ RUN export NODE_OPTIONS="--max-old-space-size=4096" && \
     yarn workspace loot-core build:browser && \
     yarn workspace @actual-app/web build:browser
 
+# Build CRDT package (required by sync-server)
+RUN yarn workspace @actual-app/crdt build
+
 # Build sync server
 RUN yarn workspace @actual-app/sync-server build && \
     cp -r packages/sync-server/src/sql packages/sync-server/build/src/sql
@@ -55,9 +58,10 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy built artifacts from builder - recreate proper structure
-# The sync server expects @actual-app/web to be resolvable
+# The sync server expects @actual-app/web and @actual-app/crdt to be resolvable
 COPY --from=builder /app/packages/sync-server/build ./packages/sync-server/build
 COPY --from=builder /app/packages/desktop-client/build ./packages/desktop-client/build
+COPY --from=builder /app/packages/crdt/dist ./packages/crdt/dist
 
 # CRITICAL FIX: Copy root node_modules for hoisted dependencies (like 'migrate')
 # Yarn workspaces uses hoisting, so dependencies are in /app/node_modules, not package-specific node_modules
@@ -67,6 +71,7 @@ COPY --from=builder /app/.yarnrc.yml ./.yarnrc.yml
 
 COPY --from=builder /app/packages/sync-server/package.json ./packages/sync-server/package.json
 COPY --from=builder /app/packages/desktop-client/package.json ./packages/desktop-client/package.json
+COPY --from=builder /app/packages/crdt/package.json ./packages/crdt/package.json
 # Create node_modules symlink for @actual-app/web
 RUN mkdir -p /app/packages/sync-server/node_modules/@actual-app && \
     ln -s /app/packages/desktop-client /app/packages/sync-server/node_modules/@actual-app/web
