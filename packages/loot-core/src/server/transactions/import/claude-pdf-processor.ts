@@ -48,11 +48,20 @@ export type ClaudePDFResponse = {
  * Sends PDF to Agent Server which uses Claude API with agent tools
  */
 export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFResponse> {
-  // Get agent server URL from environment or use localhost for development
-  const agentServerUrl = process.env.ANTHROPIC_AGENT_URL || 'http://localhost:4000';
+  // Determine agent server URL based on environment
+  // In production (Fly.io), use production URL
+  // In development, use localhost
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    (typeof window !== 'undefined' && window.location.hostname !== 'localhost');
+
+  const agentServerUrl = isProduction
+    ? 'https://actual-agent-sr.fly.dev'
+    : 'http://localhost:4000';
 
   logger.info('[Claude PDF Processor] Starting AGENT-based PDF processing:', filepath);
   logger.info('[Claude PDF Processor] Agent Server:', agentServerUrl);
+  logger.info('[Claude PDF Processor] Environment: ', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
 
   try {
     // Step 1: Read PDF file as binary

@@ -11,10 +11,14 @@
 import { type CategoryEntity, type TransactionEntity } from 'loot-core/types/models';
 
 // Agent Server configuration
-const AGENT_SERVER_URL =
-  process.env.NODE_ENV === 'production'
-    ? 'https://actual-agent-sr.fly.dev'
-    : 'http://localhost:4000';
+// Detect production by checking if we're NOT on localhost
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost');
+
+const AGENT_SERVER_URL = isProduction
+  ? 'https://actual-agent-sr.fly.dev'
+  : 'http://localhost:4000';
 
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
