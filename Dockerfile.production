@@ -37,7 +37,8 @@ RUN export NODE_OPTIONS="--max-old-space-size=4096" && \
     yarn workspace @actual-app/web build:browser
 
 # Build CRDT package (required by sync-server)
-RUN yarn workspace @actual-app/crdt build
+RUN yarn workspace @actual-app/crdt build && \
+    cp packages/crdt/src/proto/sync_pb.js packages/crdt/dist/src/proto/sync_pb.js
 
 # Build sync server
 RUN yarn workspace @actual-app/sync-server build && \
