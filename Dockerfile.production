@@ -58,7 +58,13 @@ RUN apt-get update -y && \
 # The sync server expects @actual-app/web to be resolvable
 COPY --from=builder /app/packages/sync-server/build ./packages/sync-server/build
 COPY --from=builder /app/packages/desktop-client/build ./packages/desktop-client/build
-COPY --from=builder /app/packages/sync-server/node_modules ./packages/sync-server/node_modules
+
+# CRITICAL FIX: Copy root node_modules for hoisted dependencies (like 'migrate')
+# Yarn workspaces uses hoisting, so dependencies are in /app/node_modules, not package-specific node_modules
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/.yarnrc.yml ./.yarnrc.yml
+
 COPY --from=builder /app/packages/sync-server/package.json ./packages/sync-server/package.json
 COPY --from=builder /app/packages/desktop-client/package.json ./packages/desktop-client/package.json
 # Create node_modules symlink for @actual-app/web
