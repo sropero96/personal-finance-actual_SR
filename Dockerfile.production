@@ -72,9 +72,10 @@ COPY --from=builder /app/.yarnrc.yml ./.yarnrc.yml
 COPY --from=builder /app/packages/sync-server/package.json ./packages/sync-server/package.json
 COPY --from=builder /app/packages/desktop-client/package.json ./packages/desktop-client/package.json
 COPY --from=builder /app/packages/crdt/package.json ./packages/crdt/package.json
-# Create node_modules symlink for @actual-app/web
+# Create node_modules symlinks for workspace packages
 RUN mkdir -p /app/packages/sync-server/node_modules/@actual-app && \
-    ln -s /app/packages/desktop-client /app/packages/sync-server/node_modules/@actual-app/web
+    ln -s /app/packages/desktop-client /app/packages/sync-server/node_modules/@actual-app/web && \
+    ln -s /app/packages/crdt /app/packages/sync-server/node_modules/@actual-app/crdt
 
 # Copy Anthropic Agent Server
 COPY --from=builder /app/anthropic-pdf-agent ./anthropic-pdf-agent
