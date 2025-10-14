@@ -9,12 +9,17 @@ export-2020-01-10.csv
 
 # Secrets
 .secret-tokens
+.env
+.env.local
 
 # MacOS
 .DS_Store
 
 # Logs
 **/*.log
+
+# Uploads (agent server temporary files)
+anthropic-pdf-agent/uploads/
 
 # JavaScript
 node_modules

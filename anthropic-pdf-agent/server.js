@@ -11,13 +11,56 @@
  * 4. Returns structured JSON to Actual Budget
  */
 
-require('dotenv').config({ path: '../.env' });
+const path = require('path');
+
+// Load environment variables from multiple sources
+require('dotenv').config({ path: path.join(__dirname, '.env') }); // Local .env
+require('dotenv').config({ path: path.join(__dirname, '../.env') }); // Root .env
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs').promises;
-const path = require('path');
+
+console.log('🤖 Anthropic Agent Server starting...');
+
+// ============================================
+// CONFIGURATION VALIDATION (Fail-fast)
+// ============================================
+const REQUIRED_CONFIG = {
+  VITE_ANTHROPIC_API_KEY: process.env.VITE_ANTHROPIC_API_KEY,
+};
+
+const missingConfig = Object.entries(REQUIRED_CONFIG)
+  .filter(([key, value]) => !value)
+  .map(([key]) => key);
+
+if (missingConfig.length > 0) {
+  console.error('\n❌ CONFIGURATION ERROR: Missing required environment variables:\n');
+  missingConfig.forEach(key => console.error(`   - ${key}`));
+  console.error('\n📝 To fix this:');
+  console.error('   1. Copy .env.example to .env in the anthropic-pdf-agent/ directory');
+  console.error('   2. Add your Anthropic API key: VITE_ANTHROPIC_API_KEY=sk-ant-...');
+  console.error('   3. Get your API key from: https://console.anthropic.com/settings/keys\n');
+  console.error('💡 For production (Fly.io), set secrets with: fly secrets set VITE_ANTHROPIC_API_KEY=sk-ant-...\n');
+  process.exit(1);
+}
+
+// Validate API key format
+if (!REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY.startsWith('sk-ant-')) {
+  console.error('\n❌ CONFIGURATION ERROR: Invalid Anthropic API key format');
+  console.error('   Expected format: sk-ant-...');
+  console.error('   Get a valid key from: https://console.anthropic.com/settings/keys\n');
+  process.exit(1);
+}
+
+console.log('✅ Configuration validated');
+console.log(`📡 API Key: ${REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY.substring(0, 15)}...`);
+
+// ============================================
+// SERVER INITIALIZATION
+// ============================================
 
 const app = express();
 const PORT = 4000;
@@ -32,13 +75,10 @@ const upload = multer({
 app.use(cors());
 app.use(express.json());
 
-// Initialize Anthropic client
+// Initialize Anthropic client (safe now, config is validated)
 const anthropic = new Anthropic({
-  apiKey: process.env.VITE_ANTHROPIC_API_KEY,
+  apiKey: REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY,
 });
-
-console.log('🤖 Anthropic Agent Server starting...');
-console.log(`📡 API Key configured: ${process.env.VITE_ANTHROPIC_API_KEY ? 'YES' : 'NO'}`);
 
 /**
  * Agent Tool: Read PDF and extract text
