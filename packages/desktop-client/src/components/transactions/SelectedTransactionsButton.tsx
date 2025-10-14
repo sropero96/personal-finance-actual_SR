@@ -39,6 +39,7 @@ type SelectedTransactionsButtonProps = {
   onUnlinkSchedule: (selectedIds: string[]) => void;
   onCreateRule: (selectedIds: string[]) => void;
   onRunRules: (selectedIds: string[]) => void;
+  onAICategorize: (selectedIds: string[]) => void;
   onSetTransfer: (selectedIds: string[]) => void;
   onScheduleAction: (
     action: 'post-transaction' | 'post-transaction-today' | 'skip' | 'complete',
@@ -60,6 +61,7 @@ export function SelectedTransactionsButton({
   onUnlinkSchedule,
   onCreateRule,
   onRunRules,
+  onAICategorize,
   onSetTransfer,
   onScheduleAction,
   showMakeTransfer,
@@ -353,6 +355,11 @@ export function SelectedTransactionsButton({
                       name: 'run-rules',
                       text: t('Run Rules'),
                     } as const,
+                    {
+                      name: 'ai-categorize',
+                      text: t('AI Categorize'),
+                      key: 'I',
+                    } as const,
                   ]),
 
               ...(showMakeTransfer
@@ -442,6 +449,9 @@ export function SelectedTransactionsButton({
             break;
           case 'run-rules':
             onRunRules(selectedIds);
+            break;
+          case 'ai-categorize':
+            onAICategorize(selectedIds);
             break;
           case 'set-transfer':
             onSetTransfer(selectedIds);

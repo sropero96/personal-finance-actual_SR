@@ -79,6 +79,8 @@ import {
   replaceModal,
 } from '@desktop-client/modals/modalsSlice';
 import { addNotification } from '@desktop-client/notifications/notificationsSlice';
+import { suggestCategoriesWithRetry } from '@desktop-client/util/agent2-service';
+import { fetchAgent2Context } from '@desktop-client/hooks/useAgent2Context';
 import { createPayee, getPayees } from '@desktop-client/payees/payeesSlice';
 import * as queries from '@desktop-client/queries';
 import { aqlQuery } from '@desktop-client/queries/aqlQuery';
@@ -714,6 +716,130 @@ class AccountInternal extends PureComponent<
           notification: {
             type: 'error',
             message: 'Failed to apply rules to transactions',
+          },
+        }),
+      );
+    } finally {
+      this.setState({ workingHard: false });
+    }
+  };
+
+  onAICategorize = async (ids: string[]) => {
+    try {
+      this.setState({ workingHard: true });
+
+      // Get selected transactions
+      const transactions = this.state.transactions.filter(trans =>
+        ids.includes(trans.id),
+      );
+
+      if (transactions.length === 0) {
+        console.warn('[Account] No transactions selected for AI categorization');
+        return;
+      }
+
+      console.log('[Account] AI Categorize: Processing', transactions.length, 'transactions');
+
+      // Fetch context data for Agent 2
+      const context = await fetchAgent2Context(
+        transactions,
+        this.props.categoryGroups,
+      );
+
+      console.log('[Account] AI Categorize: Context loaded', {
+        categories: context.categories.length,
+        rules: context.rules.length,
+        historical: context.historicalTransactions.length,
+      });
+
+      // Call Agent 2 with retry
+      const result = await suggestCategoriesWithRetry({
+        transactions: transactions.map(tx => ({
+          id: tx.id,
+          payee_name: tx.payee_name,
+          payee: tx.payee,
+          amount: tx.amount || 0,
+          date: tx.date || '',
+          notes: tx.notes,
+        })),
+        categories: context.categories,
+        rules: context.rules,
+        historicalTransactions: context.historicalTransactions,
+      });
+
+      console.log('[Account] AI Categorize: Received', result.suggestions.length, 'suggestions');
+
+      // Open modal with suggestions
+      this.props.dispatch(
+        pushModal({
+          modal: {
+            name: 'ai-categorize',
+            options: {
+              transactions,
+              suggestions: result.suggestions,
+              onApply: async (appliedCategories: Map<string, string>) => {
+                console.log('[Account] Applying', appliedCategories.size, 'category suggestions');
+
+                // Build updated transactions
+                const updated: TransactionEntity[] = [];
+
+                appliedCategories.forEach((categoryId, transactionId) => {
+                  const transaction = transactions.find(tx => tx.id === transactionId);
+                  if (transaction) {
+                    updated.push({
+                      ...transaction,
+                      category: categoryId,
+                    });
+                  }
+                });
+
+                // Batch update transactions
+                if (updated.length > 0) {
+                  await send('transactions-batch-update', {
+                    updated,
+                    learnCategories: true, // Learn from user's choices
+                  });
+
+                  // Refresh transaction list
+                  this.fetchTransactions();
+
+                  // Show success notification
+                  this.props.dispatch(
+                    addNotification({
+                      notification: {
+                        type: 'message',
+                        message: `Applied ${updated.length} AI category suggestions`,
+                      },
+                    }),
+                  );
+                }
+              },
+            },
+          },
+        }),
+      );
+
+    } catch (error) {
+      console.error('[Account] AI Categorize error:', error);
+
+      let errorMessage = 'Failed to get AI category suggestions';
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'AI categorization timed out. Please try with fewer transactions.';
+        } else if (error.message.includes('connect')) {
+          errorMessage = 'Could not connect to AI service. Please check your internet connection.';
+        } else if (error.message.includes('API key')) {
+          errorMessage = 'AI service is not configured correctly.';
+        }
+      }
+
+      this.props.dispatch(
+        addNotification({
+          notification: {
+            type: 'error',
+            message: errorMessage,
           },
         }),
       );
@@ -1792,6 +1918,7 @@ class AccountInternal extends PureComponent<
                 onBatchDelete={this.onBatchDelete}
                 onBatchDuplicate={this.onBatchDuplicate}
                 onRunRules={this.onRunRules}
+                onAICategorize={this.onAICategorize}
                 onBatchEdit={this.onBatchEdit}
                 onBatchLinkSchedule={this.onBatchLinkSchedule}
                 onBatchUnlinkSchedule={this.onBatchUnlinkSchedule}

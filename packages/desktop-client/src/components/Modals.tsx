@@ -8,6 +8,7 @@ import * as monthUtils from 'loot-core/shared/months';
 import { EditSyncAccount } from './banksync/EditSyncAccount';
 import { AccountAutocompleteModal } from './modals/AccountAutocompleteModal';
 import { AccountMenuModal } from './modals/AccountMenuModal';
+import { AICategorizeModal } from './modals/AICategorizeModal';
 import { BudgetAutomationsModal } from './modals/BudgetAutomationsModal';
 import { BudgetFileSelectionModal } from './modals/BudgetFileSelectionModal';
 import { BudgetPageMenuModal } from './modals/BudgetPageMenuModal';
@@ -118,6 +119,9 @@ export function Modals() {
 
         case 'import-transactions':
           return <ImportTransactionsModal key={key} {...modal.options} />;
+
+        case 'ai-categorize':
+          return <AICategorizeModal key={key} {...modal.options} />;
 
         case 'add-account':
           return <CreateAccountModal key={key} {...modal.options} />;
