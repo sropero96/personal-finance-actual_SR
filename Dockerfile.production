@@ -98,9 +98,10 @@ echo "⏳ Waiting for Agent Server..."
 sleep 5
 
 # Start Actual Budget Sync Server
+# CRITICAL: Run from /app (not /app/packages/sync-server/build) so Node.js can find /app/node_modules
 echo "💰 Starting Actual Budget Sync Server on port 5006..."
-cd /app/packages/sync-server/build || exit 1
-exec node app.js
+cd /app || exit 1
+exec node packages/sync-server/build/app.js
 EOF
 
 RUN chmod +x /app/start.sh
