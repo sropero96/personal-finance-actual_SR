@@ -11,10 +11,17 @@
 import { type CategoryEntity, type TransactionEntity } from 'loot-core/types/models';
 
 // Agent Server configuration
-// Detect production by checking if we're NOT on localhost
-const isProduction =
-  process.env.NODE_ENV === 'production' ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost');
+// More robust detection: check hostname first (most reliable in browser)
+let isProduction = false;
+
+if (typeof window !== 'undefined') {
+  const hostname = window.location.hostname;
+  // Production: Fly.io deployment or any non-localhost hostname
+  isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
+} else {
+  // Server-side (Node.js) - use environment variable
+  isProduction = process.env.NODE_ENV === 'production';
+}
 
 const AGENT_SERVER_URL = isProduction
   ? 'https://actual-agent-sr.fly.dev'

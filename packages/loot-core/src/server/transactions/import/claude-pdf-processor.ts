@@ -49,19 +49,27 @@ export type ClaudePDFResponse = {
  */
 export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFResponse> {
   // Determine agent server URL based on environment
-  // In production (Fly.io), use production URL
-  // In development, use localhost
-  const isProduction =
-    process.env.NODE_ENV === 'production' ||
-    (typeof window !== 'undefined' && window.location.hostname !== 'localhost');
+  // More robust detection: check hostname first (most reliable in browser)
+  let isProduction = false;
+  let hostname = 'unknown';
+
+  if (typeof window !== 'undefined') {
+    hostname = window.location.hostname;
+    // Production: Fly.io deployment or any non-localhost hostname
+    isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
+  } else {
+    // Server-side (Node.js) - use environment variable
+    isProduction = process.env.NODE_ENV === 'production';
+  }
 
   const agentServerUrl = isProduction
     ? 'https://actual-agent-sr.fly.dev'
     : 'http://localhost:4000';
 
   logger.info('[Claude PDF Processor] Starting AGENT-based PDF processing:', filepath);
+  logger.info('[Claude PDF Processor] Hostname:', hostname);
   logger.info('[Claude PDF Processor] Agent Server:', agentServerUrl);
-  logger.info('[Claude PDF Processor] Environment: ', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
+  logger.info('[Claude PDF Processor] Environment:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
 
   try {
     // Step 1: Read PDF file as binary
