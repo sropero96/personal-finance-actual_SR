@@ -52,11 +52,19 @@ import {
   TableHeader,
   TableWithNavigator,
 } from '@desktop-client/components/table';
+import { AICategorizeModal } from '@desktop-client/components/modals/AICategorizeModal';
+import { fetchAgent2Context } from '@desktop-client/hooks/useAgent2Context';
 import { useCategories } from '@desktop-client/hooks/useCategories';
 import { useDateFormat } from '@desktop-client/hooks/useDateFormat';
 import { useSyncedPrefs } from '@desktop-client/hooks/useSyncedPrefs';
+import { addNotification } from '@desktop-client/notifications/notificationsSlice';
 import { reloadPayees } from '@desktop-client/payees/payeesSlice';
 import { useDispatch } from '@desktop-client/redux';
+import {
+  suggestCategoriesWithRetry,
+  checkAgentServerHealth,
+  type Agent2Suggestion,
+} from '@desktop-client/util/agent2-service';
 
 function getFileType(filepath: string): string {
   const m = filepath.match(/\.([^.]*)$/);
@@ -187,6 +195,11 @@ export function ImportTransactionsModal({
   const [multiplierEnabled, setMultiplierEnabled] = useState(false);
   const [reconcile, setReconcile] = useState(true);
   const [importNotes, setImportNotes] = useState(true);
+
+  // Agent 2 (Category Suggester) state
+  const [showAICategorizeModal, setShowAICategorizeModal] = useState(false);
+  const [agent2Suggestions, setAgent2Suggestions] = useState<Agent2Suggestion[]>([]);
+  const [isLoadingAgent2, setIsLoadingAgent2] = useState(false);
 
   // This cannot be set after parsing the file, because changing it
   // requires re-parsing the file. This is different from the other
@@ -578,6 +591,146 @@ export function ImportTransactionsModal({
     });
 
     setTransactions(newTransactions);
+  }
+
+  // Agent 2: Suggest categories using AI
+  async function onSuggestCategories() {
+    try {
+      setIsLoadingAgent2(true);
+
+      // Step 1: Check if Agent Server is available
+      const isHealthy = await checkAgentServerHealth();
+      if (!isHealthy) {
+        dispatch(
+          addNotification({
+            notification: {
+              id: 'agent2-health-check-failed',
+              type: 'error',
+              message: t('Agent Server is not available. Please try again later.'),
+            },
+          }),
+        );
+        setIsLoadingAgent2(false);
+        return;
+      }
+
+      // Step 2: Filter transactions that need categorization (selected, not matched, without category)
+      const uncategorizedTransactions = transactions.filter(
+        trans =>
+          trans.selected &&
+          !trans.isMatchedTransaction &&
+          (!trans.category || trans.category === 'uncategorized'),
+      );
+
+      if (uncategorizedTransactions.length === 0) {
+        dispatch(
+          addNotification({
+            notification: {
+              id: 'agent2-no-uncategorized',
+              type: 'message',
+              message: t('All selected transactions already have categories.'),
+            },
+          }),
+        );
+        setIsLoadingAgent2(false);
+        return;
+      }
+
+      // Step 3: Fetch context data (categories, rules, historical transactions)
+      console.log('[ImportTransactionsModal] Fetching Agent 2 context...');
+      const context = await fetchAgent2Context(
+        uncategorizedTransactions.map(t => ({
+          id: String(t.trns_id || t.id || `temp-${Math.random()}`),
+          payee: String(t.payee || ''),
+          amount: typeof t.amount === 'number' ? t.amount : amountToInteger(t.amount || 0),
+          date: String(t.date || ''),
+          notes: String(t.notes || ''),
+          account: accountId, // Add required field for TransactionEntity
+        })) as any, // Cast to avoid type mismatch between ImportTransaction and TransactionEntity
+        categories,
+      );
+
+      console.log('[ImportTransactionsModal] Context fetched:', {
+        categories: context.categories.length,
+        rules: context.rules.length,
+        historical: context.historicalTransactions.length,
+      });
+
+      // Step 4: Call Agent 2
+      console.log('[ImportTransactionsModal] Calling Agent 2...');
+      const response = await suggestCategoriesWithRetry({
+        transactions: uncategorizedTransactions.map(t => ({
+          id: String(t.trns_id || t.id || `temp-${Math.random()}`),
+          payee_name: String(t.payee || ''),
+          payee: String(t.payee || ''),
+          amount: typeof t.amount === 'number' ? t.amount : amountToInteger(t.amount || 0),
+          date: String(t.date || ''),
+          notes: String(t.notes || ''),
+        })),
+        categories: context.categories,
+        rules: context.rules,
+        historicalTransactions: context.historicalTransactions,
+      });
+
+      console.log('[ImportTransactionsModal] Agent 2 response:', {
+        success: response.success,
+        suggestions: response.suggestions.length,
+        claudeCalls: response.stats?.claudeCalls,
+      });
+
+      // Step 5: Show modal with suggestions
+      setAgent2Suggestions(response.suggestions);
+      setShowAICategorizeModal(true);
+      setIsLoadingAgent2(false);
+    } catch (error) {
+      console.error('[ImportTransactionsModal] Agent 2 error:', error);
+      dispatch(
+        addNotification({
+          notification: {
+            id: 'agent2-error',
+            type: 'error',
+            message: t('Failed to get category suggestions: {{error}}', {
+              error: error.message || 'Unknown error',
+            }),
+          },
+        }),
+      );
+      setIsLoadingAgent2(false);
+    }
+  }
+
+  // Apply Agent 2 category suggestions
+  async function onApplyAgent2Suggestions(
+    appliedCategories: Map<string, string>,
+  ) {
+    console.log('[ImportTransactionsModal] Applying Agent 2 suggestions:', appliedCategories.size);
+
+    // Update transactions with selected categories
+    const updatedTransactions = transactions.map(trans => {
+      const transId = String(trans.trns_id || trans.id || '');
+      if (appliedCategories.has(transId)) {
+        return {
+          ...trans,
+          category: appliedCategories.get(transId),
+        };
+      }
+      return trans;
+    });
+
+    setTransactions(updatedTransactions);
+    setShowAICategorizeModal(false);
+
+    dispatch(
+      addNotification({
+        notification: {
+          id: 'agent2-applied',
+          type: 'message',
+          message: t('Applied {{count}} category suggestions', {
+            count: appliedCategories.size,
+          }),
+        },
+      }),
+    );
   }
 
   async function onImport(close) {
@@ -1128,7 +1281,7 @@ export function ImportTransactionsModal({
           )}
 
           <View style={{ flexDirection: 'row', marginTop: 5 }}>
-            {/*Submit Button */}
+            {/*Submit Buttons */}
             <View
               style={{
                 alignSelf: 'flex-end',
@@ -1137,6 +1290,38 @@ export function ImportTransactionsModal({
                 gap: '1em',
               }}
             >
+              {/* Agent 2: Suggest Categories Button */}
+              {(() => {
+                const uncategorizedCount = transactions?.filter(
+                  trans =>
+                    trans.selected &&
+                    !trans.isMatchedTransaction &&
+                    (!trans.category || trans.category === 'uncategorized'),
+                ).length;
+
+                // Only show button if there are uncategorized transactions
+                if (uncategorizedCount > 0 && loadingState !== 'importing') {
+                  return (
+                    <ButtonWithLoading
+                      variant="normal"
+                      isDisabled={uncategorizedCount === 0}
+                      isLoading={isLoadingAgent2}
+                      onPress={onSuggestCategories}
+                    >
+                      {isLoadingAgent2 ? (
+                        <Trans>Getting suggestions...</Trans>
+                      ) : (
+                        <Trans count={uncategorizedCount}>
+                          Suggest categories ({{ count: uncategorizedCount }})
+                        </Trans>
+                      )}
+                    </ButtonWithLoading>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Import Button */}
               {(() => {
                 const count = transactions?.filter(
                   trans => !trans.isMatchedTransaction && trans.selected,
@@ -1159,6 +1344,26 @@ export function ImportTransactionsModal({
             </View>
           </View>
         </>
+      )}
+
+      {/* Agent 2: Category Suggestions Modal */}
+      {showAICategorizeModal && (
+        <AICategorizeModal
+          transactions={transactions.filter(
+            t =>
+              t.selected &&
+              !t.isMatchedTransaction &&
+              (!t.category || t.category === 'uncategorized'),
+          ).map(t => ({
+            id: String(t.trns_id || t.id || ''),
+            payee: String(t.payee || ''),
+            amount: typeof t.amount === 'number' ? t.amount : amountToInteger(t.amount || 0),
+            account: accountId,
+          })) as any} // Cast to TransactionEntity[]
+          suggestions={agent2Suggestions}
+          onApply={onApplyAgent2Suggestions}
+          onClose={() => setShowAICategorizeModal(false)}
+        />
       )}
     </Modal>
   );
