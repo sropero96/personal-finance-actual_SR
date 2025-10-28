@@ -54,6 +54,7 @@ import { TransactionList } from '@desktop-client/components/transactions/Transac
 import { validateAccountName } from '@desktop-client/components/util/accountValidation';
 import { useAccountPreviewTransactions } from '@desktop-client/hooks/useAccountPreviewTransactions';
 import { useAccounts } from '@desktop-client/hooks/useAccounts';
+import { fetchAgent2Context } from '@desktop-client/hooks/useAgent2Context';
 import { SchedulesProvider } from '@desktop-client/hooks/useCachedSchedules';
 import { useCategories } from '@desktop-client/hooks/useCategories';
 import { useDateFormat } from '@desktop-client/hooks/useDateFormat';
@@ -79,8 +80,6 @@ import {
   replaceModal,
 } from '@desktop-client/modals/modalsSlice';
 import { addNotification } from '@desktop-client/notifications/notificationsSlice';
-import { suggestCategoriesWithRetry } from '@desktop-client/util/agent2-service';
-import { fetchAgent2Context } from '@desktop-client/hooks/useAgent2Context';
 import { createPayee, getPayees } from '@desktop-client/payees/payeesSlice';
 import * as queries from '@desktop-client/queries';
 import { aqlQuery } from '@desktop-client/queries/aqlQuery';
@@ -91,6 +90,7 @@ import {
 import { useSelector, useDispatch } from '@desktop-client/redux';
 import { type AppDispatch } from '@desktop-client/redux/store';
 import { updateNewTransactions } from '@desktop-client/transactions/transactionsSlice';
+import { suggestCategoriesWithRetry } from '@desktop-client/util/agent2-service';
 
 type ConditionEntity = Partial<RuleConditionEntity> | TransactionFilterEntity;
 
@@ -734,11 +734,17 @@ class AccountInternal extends PureComponent<
       );
 
       if (transactions.length === 0) {
-        console.warn('[Account] No transactions selected for AI categorization');
+        console.warn(
+          '[Account] No transactions selected for AI categorization',
+        );
         return;
       }
 
-      console.log('[Account] AI Categorize: Processing', transactions.length, 'transactions');
+      console.log(
+        '[Account] AI Categorize: Processing',
+        transactions.length,
+        'transactions',
+      );
 
       // Fetch context data for Agent 2
       const context = await fetchAgent2Context(
@@ -756,7 +762,7 @@ class AccountInternal extends PureComponent<
       const result = await suggestCategoriesWithRetry({
         transactions: transactions.map(tx => ({
           id: tx.id,
-          payee_name: tx.payee_name,
+          payee_name: tx.imported_payee || tx.payee || 'Unknown',
           payee: tx.payee,
           amount: tx.amount || 0,
           date: tx.date || '',
@@ -767,7 +773,11 @@ class AccountInternal extends PureComponent<
         historicalTransactions: context.historicalTransactions,
       });
 
-      console.log('[Account] AI Categorize: Received', result.suggestions.length, 'suggestions');
+      console.log(
+        '[Account] AI Categorize: Received',
+        result.suggestions.length,
+        'suggestions',
+      );
 
       // Open modal with suggestions
       this.props.dispatch(
@@ -778,13 +788,19 @@ class AccountInternal extends PureComponent<
               transactions,
               suggestions: result.suggestions,
               onApply: async (appliedCategories: Map<string, string>) => {
-                console.log('[Account] Applying', appliedCategories.size, 'category suggestions');
+                console.log(
+                  '[Account] Applying',
+                  appliedCategories.size,
+                  'category suggestions',
+                );
 
                 // Build updated transactions
                 const updated: TransactionEntity[] = [];
 
                 appliedCategories.forEach((categoryId, transactionId) => {
-                  const transaction = transactions.find(tx => tx.id === transactionId);
+                  const transaction = transactions.find(
+                    tx => tx.id === transactionId,
+                  );
                   if (transaction) {
                     updated.push({
                       ...transaction,
@@ -814,11 +830,13 @@ class AccountInternal extends PureComponent<
                   );
                 }
               },
+              onClose: () => {
+                console.log('[Account] AI Categorize modal closed');
+              },
             },
           },
         }),
       );
-
     } catch (error) {
       console.error('[Account] AI Categorize error:', error);
 
@@ -827,9 +845,11 @@ class AccountInternal extends PureComponent<
       // Provide more specific error messages
       if (error instanceof Error) {
         if (error.message.includes('timeout')) {
-          errorMessage = 'AI categorization timed out. Please try with fewer transactions.';
+          errorMessage =
+            'AI categorization timed out. Please try with fewer transactions.';
         } else if (error.message.includes('connect')) {
-          errorMessage = 'Could not connect to AI service. Please check your internet connection.';
+          errorMessage =
+            'Could not connect to AI service. Please check your internet connection.';
         } else if (error.message.includes('API key')) {
           errorMessage = 'AI service is not configured correctly.';
         }

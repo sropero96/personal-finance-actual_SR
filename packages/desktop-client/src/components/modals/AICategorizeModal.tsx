@@ -7,13 +7,13 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans , useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { AnimatedLoading } from '@actual-app/components/icons/AnimatedLoading';
 import { Stack } from '@actual-app/components/stack';
-import { theme } from '@actual-app/components/theme';
 import { Text } from '@actual-app/components/text';
+import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
 import { type TransactionEntity } from 'loot-core/types/models';
@@ -174,14 +174,16 @@ export function AICategorizeModal({
               style={{
                 padding: 12,
                 backgroundColor: isSelected
-                  ? theme.tableRowBackgroundHoverSelected
+                  ? theme.tableRowBackgroundHover
                   : theme.tableBackground,
                 border: `1px solid ${theme.tableBorder}`,
                 borderRadius: 4,
                 cursor: hasCategory ? 'pointer' : 'not-allowed',
                 opacity: hasCategory ? 1 : 0.6,
               }}
-              onClick={() => hasCategory && toggleSelection(suggestion.transaction_id)}
+              onClick={() =>
+                hasCategory && toggleSelection(suggestion.transaction_id)
+              }
             >
               <View
                 style={{
@@ -201,11 +203,19 @@ export function AICategorizeModal({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: isSelected ? theme.noticeTextLight : 'transparent',
+                      backgroundColor: isSelected
+                        ? theme.noticeTextLight
+                        : 'transparent',
                     }}
                   >
                     {isSelected && (
-                      <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>
+                      <Text
+                        style={{
+                          color: 'white',
+                          fontSize: 14,
+                          fontWeight: 'bold',
+                        }}
+                      >
                         ✓
                       </Text>
                     )}
@@ -214,9 +224,15 @@ export function AICategorizeModal({
 
                 {/* Transaction Info */}
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
                     <Text style={{ fontWeight: 600 }}>
-                      {transaction.payee_name || transaction.payee || 'Unknown'}
+                      {transaction.imported_payee || transaction.payee || 'Unknown'}
                     </Text>
                     <Text style={{ color: theme.pageTextSubdued }}>
                       ${Math.abs(transaction.amount || 0).toFixed(2)}
@@ -226,13 +242,29 @@ export function AICategorizeModal({
                   {/* Suggestion */}
                   {hasCategory ? (
                     <View style={{ marginTop: 4 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
                         <Text>→</Text>
-                        <Text style={{ fontWeight: 500, color: theme.noticeTextLight }}>
+                        <Text
+                          style={{
+                            fontWeight: 500,
+                            color: theme.noticeTextLight,
+                          }}
+                        >
                           {suggestion.category}
                         </Text>
-                        <Text style={{ color: getConfidenceColor(suggestion.confidence) }}>
-                          {getConfidenceEmoji(suggestion.confidence)} {confidencePercent}%
+                        <Text
+                          style={{
+                            color: getConfidenceColor(suggestion.confidence),
+                          }}
+                        >
+                          {getConfidenceEmoji(suggestion.confidence)}{' '}
+                          {confidencePercent}%
                         </Text>
                       </View>
                       <Text
@@ -274,13 +306,13 @@ export function AICategorizeModal({
           gap: 8,
         }}
       >
-        <Button onPress={onClose} disabled={isApplying}>
-          {t('Cancel')}
+        <Button onPress={onClose} isDisabled={isApplying}>
+          <Trans>Cancel</Trans>
         </Button>
         <Button
           variant="primary"
           onPress={handleApply}
-          disabled={selectedCount === 0 || isApplying}
+          isDisabled={selectedCount === 0 || isApplying}
         >
           {isApplying ? (
             <>

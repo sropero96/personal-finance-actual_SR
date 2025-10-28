@@ -22,6 +22,7 @@ import { resetApp, setAppState } from '@desktop-client/app/appSlice';
 import { type SelectLinkedAccountsModalProps } from '@desktop-client/components/modals/SelectLinkedAccountsModal';
 import { createAppAsyncThunk } from '@desktop-client/redux';
 import { signOut } from '@desktop-client/users/usersSlice';
+import { type Agent2Suggestion } from '@desktop-client/util/agent2-service';
 
 const sliceName = 'modals';
 
@@ -33,6 +34,15 @@ export type Modal =
         filename: string;
         categories?: { list: CategoryEntity[]; grouped: CategoryGroupEntity[] };
         onImported: (didChange: boolean) => void;
+      };
+    }
+  | {
+      name: 'ai-categorize';
+      options: {
+        transactions: TransactionEntity[];
+        suggestions: Agent2Suggestion[];
+        onApply: (appliedCategories: Map<string, string>) => Promise<void>;
+        onClose: () => void;
       };
     }
   | {

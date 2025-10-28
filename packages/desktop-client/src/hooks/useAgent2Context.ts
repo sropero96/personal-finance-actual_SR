@@ -13,7 +13,10 @@ import { useMemo } from 'react';
 
 import { send } from 'loot-core/platform/client/fetch';
 import { q } from 'loot-core/shared/query';
-import { type TransactionEntity, type RuleEntity } from 'loot-core/types/models';
+import {
+  type TransactionEntity,
+  type RuleEntity,
+} from 'loot-core/types/models';
 
 import { useCategories } from './useCategories';
 import { useQuery } from './useQuery';
@@ -22,6 +25,33 @@ import type {
   Agent2Rule,
   Agent2HistoricalTransaction,
 } from '@desktop-client/util/agent2-service';
+
+/**
+ * Utility function to extract payee name from a transaction
+ *
+ * TransactionEntity doesn't have a payee_name field. Instead:
+ * - imported_payee: string name from bank import
+ * - payee: PayeeEntity['id'] that needs lookup
+ *
+ * For Agent 2, we primarily use imported_payee since we're categorizing
+ * newly imported transactions. For historical transactions, we use payee ID.
+ */
+function getPayeeName(tx: TransactionEntity): string {
+  // Option 1: Use imported_payee if available (from import flow)
+  if (tx.imported_payee) {
+    return tx.imported_payee;
+  }
+
+  // Option 2: Use payee ID as fallback
+  // Note: In a complete implementation, we would look up the payee name
+  // from the payees table. For now, we use the ID as a grouping key.
+  if (tx.payee) {
+    return tx.payee;
+  }
+
+  // Fallback: Unknown payee
+  return 'Unknown';
+}
 
 /**
  * Extracted context data for Agent 2
@@ -41,7 +71,7 @@ export type Agent2Context = {
  * @returns Context data for Agent 2
  */
 export function useAgent2Context(
-  transactions: TransactionEntity[]
+  transactions: TransactionEntity[],
 ): Agent2Context {
   // Categories from Redux (already loaded)
   const categoriesData = useCategories();
@@ -52,7 +82,8 @@ export function useAgent2Context(
     const payeeIds = new Set<string>();
 
     transactions.forEach(tx => {
-      if (tx.payee_name) payeeNames.add(tx.payee_name);
+      // Use imported_payee instead of non-existent payee_name
+      if (tx.imported_payee) payeeNames.add(tx.imported_payee);
       if (tx.payee) payeeIds.add(tx.payee);
     });
 
@@ -64,15 +95,15 @@ export function useAgent2Context(
 
   // Query active rules
   const rulesQuery = useMemo(
-    () =>
-      q('rules')
-        .filter({ active: true })
-        .select('*'),
-    []
+    () => q('rules').filter({ active: true }).select('*'),
+    [],
   );
 
-  const { data: rulesData, isLoading: rulesLoading, error: rulesError } =
-    useQuery<RuleEntity>(rulesQuery, []);
+  const {
+    data: rulesData,
+    isLoading: rulesLoading,
+    error: rulesError,
+  } = useQuery<RuleEntity>(() => rulesQuery, []);
 
   // Query historical transactions (only for relevant payees)
   const historicalQuery = useMemo(() => {
@@ -85,24 +116,29 @@ export function useAgent2Context(
       .filter({
         $or: [
           { payee: { $oneof: payeeFilters.ids } },
-          // TODO: Add payee_name filter if needed
+          // Note: imported_payee filter not needed - we use payee ID for historical data
         ],
         category: { $ne: null }, // Only categorized transactions
       })
       .orderBy({ date: 'desc' })
       .limit(500) // Performance limit - fetch recent transactions only
-      .select(['id', 'payee', 'payee_name', 'category', 'date', 'notes']);
+      .select(['id', 'payee', 'imported_payee', 'category', 'date', 'notes']);
   }, [payeeFilters.ids]);
 
-  const { data: historicalData, isLoading: historicalLoading, error: historicalError } =
-    useQuery<TransactionEntity>(historicalQuery, [historicalQuery]);
+  const {
+    data: historicalData,
+    isLoading: historicalLoading,
+    error: historicalError,
+  } = useQuery<TransactionEntity>(() => historicalQuery, [historicalQuery]);
 
   // Transform data to Agent 2 format
   const categories = useMemo(() => {
-    if (!categoriesData) return [];
+    if (!categoriesData?.list) return [];
 
-    return categoriesData
-      .filter(cat => !cat.hidden && cat.id !== 'income' && cat.id !== 'uncategorized')
+    return categoriesData.list
+      .filter(
+        cat => !cat.hidden && cat.id !== 'income' && cat.id !== 'uncategorized',
+      )
       .map(cat => ({
         id: cat.id,
         name: cat.name,
@@ -122,7 +158,7 @@ export function useAgent2Context(
   }, [rulesData]);
 
   const historicalTransactions = useMemo(() => {
-    if (!historicalData || !categoriesData) return [];
+    if (!historicalData || !categoriesData?.list) return [];
 
     // Group by payee + category to calculate frequency
     const grouped = new Map<string, Agent2HistoricalTransaction>();
@@ -131,10 +167,12 @@ export function useAgent2Context(
       if (!tx.category) return;
 
       // Find category name
-      const category = categoriesData.find(cat => cat.id === tx.category);
+      const category = categoriesData.list.find(cat => cat.id === tx.category);
       if (!category) return;
 
-      const key = `${tx.payee || tx.payee_name}|${tx.category}`;
+      // Use utility function to get payee name
+      const payeeName = getPayeeName(tx);
+      const key = `${payeeName}|${tx.category}`;
       const existing = grouped.get(key);
 
       if (existing) {
@@ -145,7 +183,7 @@ export function useAgent2Context(
         }
       } else {
         grouped.set(key, {
-          payeeName: tx.payee_name || '',
+          payeeName,
           categoryName: category.name,
           category: tx.category,
           date: tx.date || '',
@@ -178,15 +216,11 @@ export function useAgent2Context(
  */
 export async function fetchAgent2Context(
   transactions: TransactionEntity[],
-  categoriesData: any[] // CategoryEntity[]
+  categoriesData: any[], // CategoryEntity[]
 ): Promise<Omit<Agent2Context, 'isLoading' | 'error'>> {
   // Extract unique payee IDs
   const payeeIds = Array.from(
-    new Set(
-      transactions
-        .map(tx => tx.payee)
-        .filter(Boolean) as string[]
-    )
+    new Set(transactions.map(tx => tx.payee).filter(Boolean) as string[]),
   );
 
   // Fetch rules
@@ -204,14 +238,16 @@ export async function fetchAgent2Context(
         })
         .orderBy({ date: 'desc' })
         .limit(500)
-        .select(['id', 'payee', 'payee_name', 'category', 'date', 'notes'])
+        .select(['id', 'payee', 'imported_payee', 'category', 'date', 'notes'])
         .serialize(),
     });
   }
 
   // Transform categories
   const categories = categoriesData
-    .filter(cat => !cat.hidden && cat.id !== 'income' && cat.id !== 'uncategorized')
+    .filter(
+      cat => !cat.hidden && cat.id !== 'income' && cat.id !== 'uncategorized',
+    )
     .map(cat => ({
       id: cat.id,
       name: cat.name,
@@ -235,7 +271,9 @@ export async function fetchAgent2Context(
     const category = categoriesData.find(cat => cat.id === tx.category);
     if (!category) return;
 
-    const key = `${tx.payee || tx.payee_name}|${tx.category}`;
+    // Use utility function to get payee name
+    const payeeName = getPayeeName(tx);
+    const key = `${payeeName}|${tx.category}`;
     const existing = grouped.get(key);
 
     if (existing) {
@@ -245,7 +283,7 @@ export async function fetchAgent2Context(
       }
     } else {
       grouped.set(key, {
-        payeeName: tx.payee_name || '',
+        payeeName,
         categoryName: category.name,
         category: tx.category,
         date: tx.date || '',

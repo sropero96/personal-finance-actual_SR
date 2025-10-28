@@ -8,7 +8,10 @@
  * Documentation: CLAUDE.md - Agent 2: Category Suggester
  */
 
-import { type CategoryEntity, type TransactionEntity } from 'loot-core/types/models';
+import {
+  type CategoryEntity,
+  type TransactionEntity,
+} from 'loot-core/types/models';
 
 // Agent Server configuration
 // More robust detection: check hostname first (most reliable in browser)
@@ -109,7 +112,7 @@ export class Agent2Error extends Error {
   constructor(
     message: string,
     public type: 'network' | 'timeout' | 'server' | 'unknown',
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
     this.name = 'Agent2Error';
@@ -124,7 +127,7 @@ export class Agent2Error extends Error {
  * @throws Agent2Error if request fails
  */
 export async function suggestCategories(
-  request: Agent2Request
+  request: Agent2Request,
 ): Promise<Agent2Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -135,7 +138,7 @@ export async function suggestCategories(
       categories: request.categories.length,
       rules: request.rules.length,
       historical: request.historicalTransactions.length,
-      url: AGENT_SERVER_URL
+      url: AGENT_SERVER_URL,
     });
 
     const response = await fetch(`${AGENT_SERVER_URL}/api/suggest-categories`, {
@@ -154,7 +157,7 @@ export async function suggestCategories(
       throw new Agent2Error(
         `Agent Server returned ${response.status}: ${errorText}`,
         'server',
-        { status: response.status, body: errorText }
+        { status: response.status, body: errorText },
       );
     }
 
@@ -164,19 +167,18 @@ export async function suggestCategories(
       success: result.success,
       suggestions: result.suggestions?.length,
       claudeCalls: result.stats?.claudeCalls,
-      duration: result.stats?.durationMs
+      duration: result.stats?.durationMs,
     });
 
     if (!result.success) {
       throw new Agent2Error(
         result.error || 'Agent 2 processing failed',
         'server',
-        result
+        result,
       );
     }
 
     return result;
-
   } catch (error) {
     clearTimeout(timeoutId);
 
@@ -190,7 +192,7 @@ export async function suggestCategories(
         throw new Agent2Error(
           'Request timed out after 30 seconds',
           'timeout',
-          error
+          error,
         );
       }
 
@@ -198,17 +200,13 @@ export async function suggestCategories(
         throw new Agent2Error(
           'Could not connect to Agent Server. Please check your internet connection.',
           'network',
-          error
+          error,
         );
       }
     }
 
     // Unknown error
-    throw new Agent2Error(
-      'An unexpected error occurred',
-      'unknown',
-      error
-    );
+    throw new Agent2Error('An unexpected error occurred', 'unknown', error);
   }
 }
 
@@ -221,7 +219,7 @@ export async function suggestCategories(
  */
 export async function suggestCategoriesWithRetry(
   request: Agent2Request,
-  maxRetries = 2
+  maxRetries = 2,
 ): Promise<Agent2Response> {
   let lastError: Agent2Error | null = null;
 
@@ -243,7 +241,9 @@ export async function suggestCategoriesWithRetry(
 
       // Exponential backoff: 1s, 2s, 4s
       const delay = Math.pow(2, attempt) * 1000;
-      console.log(`[Agent 2 Service] Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+      console.log(
+        `[Agent 2 Service] Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`,
+      );
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
