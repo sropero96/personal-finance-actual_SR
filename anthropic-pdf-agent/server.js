@@ -301,7 +301,7 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
     let usage = { input_tokens: 0, output_tokens: 0 };
 
     const stream = await anthropic.messages.stream({
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-haiku-4-5',
       max_tokens: 8192, // Maximum allowed for this model (supports 100+ transactions with compact format)
       temperature: 0,
       messages: [
@@ -688,7 +688,7 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
 
       try {
         const message = await anthropic.messages.create({
-          model: 'claude-3-5-sonnet-latest',
+          model: 'claude-haiku-4-5',
           max_tokens: 1024,
           temperature: 0,
           messages: [
