@@ -1,53 +1,112 @@
 # Bitácora de Desarrollo - Actual Budget
 
-## 2025-10-29: Debug TableWithNavigator Rendering Issue (🔍 IN PROGRESS)
+## 2025-10-29: Modal Children Render Prop Bug - RESUELTO ✅
 
-### Objetivo
-Diagnosticar por qué las transacciones importadas desde PDFs no se muestran en el modal de importación, a pesar de que:
-- El Agent Server procesa correctamente 91 transacciones
-- El estado del componente tiene 93 transacciones
-- Las transacciones filtradas son 93
-- Pero `renderItem` nunca se ejecuta
+### Problema
+Las transacciones importadas desde PDFs no se mostraban en el modal de importación a pesar de:
+- ✅ Agent Server procesaba correctamente 91 transacciones
+- ✅ Estado del componente tenía 93 transacciones (91 + 2 reconciliadas)
+- ✅ Transacciones filtradas: 93
+- ✅ `modalState.isHidden: false`
+- ✅ `appState.loadingText: null`
+- ❌ Pero el modal aparecía vacío (sin tabla de transacciones)
 
-### Hipótesis
-El componente `TableWithNavigator` usa `AutoSizer` para calcular las dimensiones de la tabla. Si `AutoSizer` retorna `width === 0` o `height === 0`, el componente retorna `null` y no renderiza nada.
+### Investigación (Versiones 45-48)
 
-### Debug Logging Agregado
-**Archivos modificados**:
-1. `packages/desktop-client/src/components/modals/ImportTransactionsModal/ImportTransactionsModal.tsx` (línea 1005)
-   - Log antes de renderizar TableWithNavigator
+#### Hipótesis 1: AutoSizer retornando dimensiones 0
+- **Teoría**: `AutoSizer` retorna width/height = 0, impidiendo render
+- **Evidencia**: Logs mostraron que el código nunca llegaba a TableWithNavigator
+- **Resultado**: ❌ Falsa
 
-2. `packages/desktop-client/src/components/table.tsx` (líneas 1151, 1181-1187)
-   - Log de `isEmpty` check
-   - Log de `AutoSizer` width/height
-   - Log cuando AutoSizer retorna null
-   - Log cuando FixedSizeList se renderiza
+#### Hipótesis 2: Condicional JSX bloqueando render
+- **Teoría**: `{(!error || !error.parsed) &&` evaluando a false
+- **Evidencia**: Log mostró que el condicional evaluaba a `true`
+- **Resultado**: ❌ Falsa
 
-**Logs esperados**:
+#### Hipótesis 3: Modal isLoading overlay cubriendo contenido
+- **Teoría**: `isLoading={true}` mostraba overlay con zIndex: 1000
+- **Acción**: Forzado `isLoading={false}` (versión 47)
+- **Evidencia**: Logs confirmaron `Modal isLoading prop will be: false`
+- **Resultado**: ❌ No resolvió el problema
+
+#### Hipótesis 4: Global app loading state ocultando modal
+- **Teoría**: Redux `state.modals.isHidden = true` cuando `loadingText !== null`
+- **Acción**: Agregado logging de Redux state (versión 48)
+- **Evidencia**: Logs mostraron `modalState.isHidden: false` y `appState.loadingText: null`
+- **Resultado**: ❌ No era el problema
+
+### Causa Raíz Identificada (Versión 49) 🎯
+
+**El Modal recibía MÚLTIPLES children, convirtiéndolos en un array, impidiendo que se llamara la función render prop.**
+
+#### Código Incorrecto:
+```tsx
+<Modal name="import-transactions" isLoading={false}>
+  {({ state: { close } }) => (
+    <ModalContent />
+  )}
+  {/* ↓ SEGUNDO CHILD - causaba el bug! */}
+  {showAICategorizeModal && <AICategorizeModal />}
+</Modal>
 ```
-[render] About to render TableWithNavigator with items: 93
-[Table] isEmpty: false, items.length: 93, count: undefined
-[Table AutoSizer] width: XXX, height: YYY
-[Table AutoSizer] Rendering FixedSizeList with 93 items
+
+En React, múltiples children se convierten en un array: `children = [Function, JSXElement]`
+
+En `Modal.tsx` línea 145-147:
+```tsx
+{typeof children === 'function'
+  ? children(modalProps)  // ← NUNCA se ejecuta (children es ARRAY, no función)
+  : children}             // ← Renderiza el array directamente
 ```
 
-### Deploy Realizado
+#### Solución Implementada:
+Mover `<AICategorizeModal>` **DENTRO** del Fragment del render prop:
+
+```tsx
+<Modal name="import-transactions" isLoading={false}>
+  {({ state: { close } }) => (
+    <>
+      <ModalContent />
+      {/* ↓ Ahora está DENTRO del render prop */}
+      {showAICategorizeModal && <AICategorizeModal />}
+    </>
+  )}
+</Modal>
+```
+
+Ahora: `children = Function` → `typeof children === 'function'` = TRUE ✓
+
+### Cambios Realizados
+
+**Archivo**: `packages/desktop-client/src/components/modals/ImportTransactionsModal/ImportTransactionsModal.tsx`
+
+**Líneas 1405-1435**: Movido `<AICategorizeModal>` dentro del Fragment `<>` del render prop
+
+### Deploy Final
 ```bash
-# Build
 yarn workspace loot-core build:browser
 yarn workspace @actual-app/web build:browser
-
-# Deploy
 fly deploy --config fly.actual.toml
-fly machine start 286ed00a6d65d8 -a actual-budget-sr
 ```
 
-**Status**: ✅ Deployed
+**Status**: ✅ RESUELTO
 **URL**: https://actual-budget-sr.fly.dev
-**Machine**: 286ed00a6d65d8 (version 45)
-**Health checks**: 1/1 passing
+**Machine**: 286ed00a6d65d8 (version 49)
+**Commit**: `eee9df38` - "fix: Move AICategorizeModal inside Modal render prop children"
 
-**Commit**: `5a0771b4` - "debug(import): Add comprehensive logging to diagnose TableWithNavigator rendering issue"
+### Lecciones Aprendidas
+
+1. **React Children Arrays**: Cuando pasas múltiples children a un componente, React los convierte en un array automáticamente
+2. **Render Props Pattern**: Los componentes que usan `typeof children === 'function'` fallan silenciosamente cuando reciben arrays
+3. **Debugging Sistemático**: Trabajar desde el componente hijo hacia el padre, agregando logs en cada capa
+4. **Redux State vs Local State**: No asumir que el problema está en Redux sin verificar logs primero
+
+### Estado Final
+- ✅ Import de PDFs funciona correctamente
+- ✅ Modal se muestra con todas las transacciones
+- ✅ Agent 1 (extracción PDF) funcional
+- ✅ Agent 2 (sugerencias de categorías) funcional
+- ✅ Tabla de transacciones renderiza correctamente
 
 ### Próximo Paso
 Usuario debe:
