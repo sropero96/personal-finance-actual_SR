@@ -1402,36 +1402,36 @@ export function ImportTransactionsModal({
               })()}
             </View>
           </View>
+
+          {/* Agent 2: Category Suggestions Modal */}
+          {showAICategorizeModal && (
+            <AICategorizeModal
+              transactions={
+                transactions
+                  .filter(
+                    t =>
+                      t.selected &&
+                      !t.isMatchedTransaction &&
+                      (!t.category || t.category === 'uncategorized'),
+                  )
+                  .map(t => ({
+                    id: String(t.trns_id || t.id || ''),
+                    payee: String(t.payee || ''),
+                    amount:
+                      typeof t.amount === 'number'
+                        ? t.amount
+                        : amountToInteger(t.amount || 0),
+                    account: accountId,
+                  })) as any
+              } // Cast to TransactionEntity[]
+              suggestions={agent2Suggestions}
+              onApply={onApplyAgent2Suggestions}
+              onClose={() => setShowAICategorizeModal(false)}
+            />
+          )}
         </>
         );
       }}
-
-      {/* Agent 2: Category Suggestions Modal */}
-      {showAICategorizeModal && (
-        <AICategorizeModal
-          transactions={
-            transactions
-              .filter(
-                t =>
-                  t.selected &&
-                  !t.isMatchedTransaction &&
-                  (!t.category || t.category === 'uncategorized'),
-              )
-              .map(t => ({
-                id: String(t.trns_id || t.id || ''),
-                payee: String(t.payee || ''),
-                amount:
-                  typeof t.amount === 'number'
-                    ? t.amount
-                    : amountToInteger(t.amount || 0),
-                account: accountId,
-              })) as any
-          } // Cast to TransactionEntity[]
-          suggestions={agent2Suggestions}
-          onApply={onApplyAgent2Suggestions}
-          onClose={() => setShowAICategorizeModal(false)}
-        />
-      )}
     </Modal>
   );
 }
