@@ -59,7 +59,7 @@ import { useDateFormat } from '@desktop-client/hooks/useDateFormat';
 import { useSyncedPrefs } from '@desktop-client/hooks/useSyncedPrefs';
 import { addNotification } from '@desktop-client/notifications/notificationsSlice';
 import { reloadPayees } from '@desktop-client/payees/payeesSlice';
-import { useDispatch } from '@desktop-client/redux';
+import { useDispatch, useSelector } from '@desktop-client/redux';
 import {
   suggestCategoriesWithRetry,
   checkAgentServerHealth,
@@ -970,10 +970,19 @@ export function ImportTransactionsModal({
   console.log('[render] Filtered transactions for table:', filteredTransactions.length);
   console.log('[render] Conditional check (!error || !error.parsed):', (!error || !error?.parsed));
 
+  // Get Redux modal state to check isHidden
+  const modalState = useSelector((state: { modals: { isHidden: boolean, modalStack: any[] } }) => state.modals);
+  const appState = useSelector((state: { app: { loadingText: string | null } }) => state.app);
+
   console.log('[render] === FINAL STATE BEFORE RETURN ===');
   console.log('[render] FINAL loadingState:', loadingState);
   console.log('[render] FINAL loadingState type:', typeof loadingState);
   console.log('[render] Modal isLoading prop will be:', loadingState === 'parsing');
+  console.log('[render] === REDUX MODAL STATE ===');
+  console.log('[render] modalState.isHidden:', modalState.isHidden);
+  console.log('[render] modalStack length:', modalState.modalStack.length);
+  console.log('[render] appState.loadingText:', appState.loadingText);
+  console.log('[render] appState.loadingText === null?', appState.loadingText === null);
 
   return (
     <Modal
