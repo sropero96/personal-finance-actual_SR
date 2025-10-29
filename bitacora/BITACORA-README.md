@@ -1,5 +1,108 @@
 # Bitácora de Desarrollo - Actual Budget
 
+## 2025-10-29: Fix Claude Model Deprecation + Web Worker Environment Detection
+
+### Objetivo
+Resolver fallas en producción del sistema de importación de PDFs:
+1. Detección incorrecta de entorno en Web Workers (mostraba "localhost" en producción)
+2. Error de modelo Claude deprecado (`claude-3-5-sonnet-20241022` → `not_found_error`)
+
+### Issues Encontrados y Resueltos
+
+#### Issue 1: Web Worker Environment Detection (✅ Resuelto)
+**Problema**:
+- Console logs mostraban: `Hostname: unknown`, `Environment: DEVELOPMENT`
+- Agent Server URL incorrecta: `http://localhost:4000` (debería ser `https://actual-agent-sr.fly.dev`)
+- Error: `Failed to fetch`
+
+**Root Cause**:
+- El código de detección de entorno usaba `window.location`
+- Los Web Workers NO tienen acceso a `window`, solo a `self`
+- El PDF processor corre en Web Worker (`kcab.worker.B8D6AquI.js`)
+
+**Solución**:
+```typescript
+// ANTES (❌ No funciona en Web Workers)
+if (typeof window !== 'undefined') {
+  hostname = window.location.hostname;
+}
+
+// DESPUÉS (✅ Funciona en ambos contextos)
+const location = typeof self !== 'undefined' && self.location
+  ? self.location
+  : typeof window !== 'undefined'
+  ? window.location
+  : null;
+```
+
+**Archivos modificados**:
+- `packages/loot-core/src/server/transactions/import/claude-pdf-processor.ts`
+- `packages/desktop-client/src/util/agent2-service.ts`
+
+**Commit**: `2d1884ce` - "fix(agents): Improve environment detection for Agent Server URL"
+
+#### Issue 2: Claude Model Deprecated (✅ Resuelto)
+**Problema**:
+- Agent Server retornaba 500 error
+- Console logs: `"model: claude-3-5-sonnet-20241022"`, `"type":"not_found_error"`
+- Anthropic deprecó este modelo
+
+**Solución**:
+- Actualizar a `claude-3-5-sonnet-latest` en ambos agentes
+- Línea 304: Agent 1 (PDF Parser)
+- Línea 691: Agent 2 (Category Suggester)
+
+**Commit**: `e17dd8ea` - "fix(agent-server): Update deprecated Claude model to latest version"
+
+### Deploys Realizados
+
+#### Deploy 1: Web Worker Fix (✅ Completado)
+```bash
+# Build browser bundles
+yarn workspace loot-core build:browser
+yarn workspace @actual-app/web build:browser
+
+# Deploy
+fly deploy --config fly.actual.toml
+```
+- **Nuevo worker bundle**: `kcab.worker.CdPtxaIO.js` (reemplaza `B8D6AquI.js`)
+- **Resultado**: Environment detection correcta en production
+
+#### Deploy 2: Claude Model Update (✅ Completado)
+```bash
+fly deploy --config fly.agent.toml
+```
+- **Image size**: 76 MB
+- **Build time**: ~2 minutos (cached layers)
+- **Machine**: 6e82959fd43d68 (version 8)
+- **Health checks**: 2/2 passing
+- **Status**: ✅ Running
+
+### Verificación
+
+#### Agent Server Health
+```bash
+curl https://actual-agent-sr.fly.dev/health
+# Response: {"status":"healthy","apiKeyConfigured":true}
+```
+
+#### Fly.io Status
+| App | Machine ID | Version | Status | Health Checks |
+|-----|------------|---------|--------|---------------|
+| actual-agent-sr | 6e82959fd43d68 | 8 | ✅ started | 2/2 passing |
+| actual-budget-sr | 286ed00a6d65d8 | - | ✅ started | 1/1 passing |
+
+### Próximos Pasos
+1. **Testing manual** - Usuario debe probar importación de PDF en https://actual-budget-sr.fly.dev
+2. **Validar** - Confirmar que las transacciones se extraen correctamente
+3. **Monitorear** - Revisar logs para errores: `fly logs -a actual-agent-sr`
+
+### Commits Relacionados
+- **2d1884ce**: fix(agents): Improve environment detection for Agent Server URL
+- **e17dd8ea**: fix(agent-server): Update deprecated Claude model to latest version
+
+---
+
 ## 2025-10-28: Deploy de Agent 2 Fixes a Fly.io
 
 ### Objetivo
