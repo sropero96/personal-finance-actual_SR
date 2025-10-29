@@ -1,5 +1,66 @@
 # Bitácora de Desarrollo - Actual Budget
 
+## 2025-10-29: Debug TableWithNavigator Rendering Issue (🔍 IN PROGRESS)
+
+### Objetivo
+Diagnosticar por qué las transacciones importadas desde PDFs no se muestran en el modal de importación, a pesar de que:
+- El Agent Server procesa correctamente 91 transacciones
+- El estado del componente tiene 93 transacciones
+- Las transacciones filtradas son 93
+- Pero `renderItem` nunca se ejecuta
+
+### Hipótesis
+El componente `TableWithNavigator` usa `AutoSizer` para calcular las dimensiones de la tabla. Si `AutoSizer` retorna `width === 0` o `height === 0`, el componente retorna `null` y no renderiza nada.
+
+### Debug Logging Agregado
+**Archivos modificados**:
+1. `packages/desktop-client/src/components/modals/ImportTransactionsModal/ImportTransactionsModal.tsx` (línea 1005)
+   - Log antes de renderizar TableWithNavigator
+
+2. `packages/desktop-client/src/components/table.tsx` (líneas 1151, 1181-1187)
+   - Log de `isEmpty` check
+   - Log de `AutoSizer` width/height
+   - Log cuando AutoSizer retorna null
+   - Log cuando FixedSizeList se renderiza
+
+**Logs esperados**:
+```
+[render] About to render TableWithNavigator with items: 93
+[Table] isEmpty: false, items.length: 93, count: undefined
+[Table AutoSizer] width: XXX, height: YYY
+[Table AutoSizer] Rendering FixedSizeList with 93 items
+```
+
+### Deploy Realizado
+```bash
+# Build
+yarn workspace loot-core build:browser
+yarn workspace @actual-app/web build:browser
+
+# Deploy
+fly deploy --config fly.actual.toml
+fly machine start 286ed00a6d65d8 -a actual-budget-sr
+```
+
+**Status**: ✅ Deployed
+**URL**: https://actual-budget-sr.fly.dev
+**Machine**: 286ed00a6d65d8 (version 45)
+**Health checks**: 1/1 passing
+
+**Commit**: `5a0771b4` - "debug(import): Add comprehensive logging to diagnose TableWithNavigator rendering issue"
+
+### Próximo Paso
+Usuario debe:
+1. Ir a https://actual-budget-sr.fly.dev
+2. Importar un PDF
+3. Abrir la consola del navegador
+4. Compartir los logs completos (especialmente los que empiezan con `[Table AutoSizer]`)
+
+### Estado
+🔍 **WAITING FOR USER LOGS** - Need to confirm if AutoSizer is the issue
+
+---
+
 ## 2025-10-29: Fix Claude Model + Web Worker Environment Detection
 
 ### Objetivo
