@@ -646,10 +646,14 @@ const modalsSlice = createSlice({
         return state;
       }
       state.modalStack = [...state.modalStack, modal];
+      // Reset isHidden when opening a modal to prevent stale state from previous operations
+      state.isHidden = false;
     },
     replaceModal(state, action: PayloadAction<ReplaceModalPayload>) {
       const modal = action.payload.modal;
       state.modalStack = [modal];
+      // Reset isHidden when replacing modal to prevent stale state
+      state.isHidden = false;
     },
     popModal(state) {
       state.modalStack = state.modalStack.slice(0, -1);
