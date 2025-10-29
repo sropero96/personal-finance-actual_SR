@@ -17,10 +17,11 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') }); // Local .env
 require('dotenv').config({ path: path.join(__dirname, '../.env') }); // Root .env
 
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
+const cors = require('cors');
+const express = require('express');
+const multer = require('multer');
+
 const fs = require('fs').promises;
 
 console.log('🤖 Anthropic Agent Server starting...');
@@ -37,13 +38,23 @@ const missingConfig = Object.entries(REQUIRED_CONFIG)
   .map(([key]) => key);
 
 if (missingConfig.length > 0) {
-  console.error('\n❌ CONFIGURATION ERROR: Missing required environment variables:\n');
+  console.error(
+    '\n❌ CONFIGURATION ERROR: Missing required environment variables:\n',
+  );
   missingConfig.forEach(key => console.error(`   - ${key}`));
   console.error('\n📝 To fix this:');
-  console.error('   1. Copy .env.example to .env in the anthropic-pdf-agent/ directory');
-  console.error('   2. Add your Anthropic API key: VITE_ANTHROPIC_API_KEY=sk-ant-...');
-  console.error('   3. Get your API key from: https://console.anthropic.com/settings/keys\n');
-  console.error('💡 For production (Fly.io), set secrets with: fly secrets set VITE_ANTHROPIC_API_KEY=sk-ant-...\n');
+  console.error(
+    '   1. Copy .env.example to .env in the anthropic-pdf-agent/ directory',
+  );
+  console.error(
+    '   2. Add your Anthropic API key: VITE_ANTHROPIC_API_KEY=sk-ant-...',
+  );
+  console.error(
+    '   3. Get your API key from: https://console.anthropic.com/settings/keys\n',
+  );
+  console.error(
+    '💡 For production (Fly.io), set secrets with: fly secrets set VITE_ANTHROPIC_API_KEY=sk-ant-...\n',
+  );
   process.exit(1);
 }
 
@@ -51,12 +62,16 @@ if (missingConfig.length > 0) {
 if (!REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY.startsWith('sk-ant-')) {
   console.error('\n❌ CONFIGURATION ERROR: Invalid Anthropic API key format');
   console.error('   Expected format: sk-ant-...');
-  console.error('   Get a valid key from: https://console.anthropic.com/settings/keys\n');
+  console.error(
+    '   Get a valid key from: https://console.anthropic.com/settings/keys\n',
+  );
   process.exit(1);
 }
 
 console.log('✅ Configuration validated');
-console.log(`📡 API Key: ${REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY.substring(0, 15)}...`);
+console.log(
+  `📡 API Key: ${REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY.substring(0, 15)}...`,
+);
 
 // ============================================
 // SERVER INITIALIZATION
@@ -68,7 +83,7 @@ const PORT = 4000;
 // Configure multer for file uploads
 const upload = multer({
   dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
 // Middleware
@@ -86,17 +101,18 @@ const anthropic = new Anthropic({
 function createPDFReaderTool() {
   return {
     name: 'read_pdf',
-    description: 'Reads a PDF file and extracts all text content from all pages',
+    description:
+      'Reads a PDF file and extracts all text content from all pages',
     input_schema: {
       type: 'object',
       properties: {
         file_path: {
           type: 'string',
-          description: 'Path to the PDF file to read'
-        }
+          description: 'Path to the PDF file to read',
+        },
       },
-      required: ['file_path']
-    }
+      required: ['file_path'],
+    },
   };
 }
 
@@ -112,16 +128,16 @@ function createTransactionExtractorTool() {
       properties: {
         statement_text: {
           type: 'string',
-          description: 'Raw text from bank statement'
+          description: 'Raw text from bank statement',
         },
         bank_type: {
           type: 'string',
           enum: ['santander', 'revolut'],
-          description: 'Type of bank for format-specific extraction'
-        }
+          description: 'Type of bank for format-specific extraction',
+        },
       },
-      required: ['statement_text', 'bank_type']
-    }
+      required: ['statement_text', 'bank_type'],
+    },
   };
 }
 
@@ -131,17 +147,18 @@ function createTransactionExtractorTool() {
 function createPayeeCuratorTool() {
   return {
     name: 'curate_payee',
-    description: 'Cleans and curates payee names by removing prefixes and extracting merchant/location',
+    description:
+      'Cleans and curates payee names by removing prefixes and extracting merchant/location',
     input_schema: {
       type: 'object',
       properties: {
         raw_description: {
           type: 'string',
-          description: 'Raw transaction description from bank'
-        }
+          description: 'Raw transaction description from bank',
+        },
       },
-      required: ['raw_description']
-    }
+      required: ['raw_description'],
+    },
   };
 }
 
@@ -150,7 +167,10 @@ function createPayeeCuratorTool() {
  */
 async function executeTool(toolName, toolInput, pdfBase64) {
   console.log(`🔧 [Agent Tool] Executing: ${toolName}`);
-  console.log(`📥 [Agent Tool] Input:`, JSON.stringify(toolInput).substring(0, 200));
+  console.log(
+    `📥 [Agent Tool] Input:`,
+    JSON.stringify(toolInput).substring(0, 200),
+  );
 
   switch (toolName) {
     case 'read_pdf':
@@ -158,13 +178,13 @@ async function executeTool(toolName, toolInput, pdfBase64) {
       // For now, we'll send the PDF directly to Claude in the initial message
       return {
         success: true,
-        message: 'PDF content is included in the document attachment'
+        message: 'PDF content is included in the document attachment',
       };
 
     case 'extract_transactions':
       return {
         success: true,
-        message: 'Transactions extracted successfully'
+        message: 'Transactions extracted successfully',
       };
 
     case 'curate_payee':
@@ -180,13 +200,13 @@ async function executeTool(toolName, toolInput, pdfBase64) {
 
       return {
         success: true,
-        curated_payee: curated
+        curated_payee: curated,
       };
 
     default:
       return {
         success: false,
-        error: `Unknown tool: ${toolName}`
+        error: `Unknown tool: ${toolName}`,
       };
   }
 }
@@ -196,7 +216,9 @@ async function executeTool(toolName, toolInput, pdfBase64) {
  */
 app.post('/api/process-pdf', upload.single('pdf'), async (req, res) => {
   console.log('\n🚀 [Agent Server] New PDF processing request received');
-  console.log(`📄 [Agent Server] File: ${req.file?.originalname} (${req.file?.size} bytes)`);
+  console.log(
+    `📄 [Agent Server] File: ${req.file?.originalname} (${req.file?.size} bytes)`,
+  );
 
   try {
     if (!req.file) {
@@ -206,7 +228,9 @@ app.post('/api/process-pdf', upload.single('pdf'), async (req, res) => {
     // Read PDF file as base64
     const pdfBuffer = await fs.readFile(req.file.path);
     const pdfBase64 = pdfBuffer.toString('base64');
-    console.log(`📦 [Agent Server] PDF converted to base64: ${pdfBase64.length} chars`);
+    console.log(
+      `📦 [Agent Server] PDF converted to base64: ${pdfBase64.length} chars`,
+    );
 
     // Build comprehensive agent prompt
     const agentPrompt = `You are an expert Spanish bank statement transaction extractor and curator.
@@ -268,38 +292,45 @@ Return ONLY valid JSON (no markdown, no code blocks):
 IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no code blocks.`;
 
     // Call Claude API with streaming for large responses
-    console.log('🤖 [Agent] Sending PDF to Claude API with agent prompt (streaming mode)...');
+    console.log(
+      '🤖 [Agent] Sending PDF to Claude API with agent prompt (streaming mode)...',
+    );
 
     let responseText = '';
     let stopReason = '';
     let usage = { input_tokens: 0, output_tokens: 0 };
 
     const stream = await anthropic.messages.stream({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-5-sonnet-latest',
       max_tokens: 8192, // Maximum allowed for this model (supports 100+ transactions with compact format)
       temperature: 0,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: pdfBase64,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: pdfBase64,
+              },
             },
-          },
-          {
-            type: 'text',
-            text: agentPrompt,
-          },
-        ],
-      }],
+            {
+              type: 'text',
+              text: agentPrompt,
+            },
+          ],
+        },
+      ],
     });
 
     // Collect streamed response
     for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+      if (
+        chunk.type === 'content_block_delta' &&
+        chunk.delta?.type === 'text_delta'
+      ) {
         responseText += chunk.delta.text;
       } else if (chunk.type === 'message_stop') {
         stopReason = 'end_turn';
@@ -325,19 +356,29 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
 
     // Parse agent response
     console.log(`📝 [Agent] Response length: ${responseText.length} chars`);
-    console.log(`📄 [Agent] Response preview: ${responseText.substring(0, 200)}...`);
+    console.log(
+      `📄 [Agent] Response preview: ${responseText.substring(0, 200)}...`,
+    );
 
     // Warn if response was truncated
     if (stopReason === 'max_tokens') {
-      console.error('❌ [Agent] CRITICAL: Response was TRUNCATED! Hit max_tokens limit (8192)');
-      console.error('❌ [Agent] This PDF has TOO MANY transactions for single-pass processing');
-      console.error('💡 [Agent] Solution: The response will be incomplete. User should split PDF or reduce transaction count.');
+      console.error(
+        '❌ [Agent] CRITICAL: Response was TRUNCATED! Hit max_tokens limit (8192)',
+      );
+      console.error(
+        '❌ [Agent] This PDF has TOO MANY transactions for single-pass processing',
+      );
+      console.error(
+        '💡 [Agent] Solution: The response will be incomplete. User should split PDF or reduce transaction count.',
+      );
     }
 
     // Clean and parse JSON
     let cleanedText = responseText.trim();
     if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/```json?\n?/g, '').replace(/```\n?$/g, '');
+      cleanedText = cleanedText
+        .replace(/```json?\n?/g, '')
+        .replace(/```\n?$/g, '');
     }
 
     const result = JSON.parse(cleanedText);
@@ -354,7 +395,6 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
     // Return JSON response
     res.json(result);
     console.log('✅ [Agent Server] Response sent to client\n');
-
   } catch (error) {
     console.error('❌ [Agent Server] Error:', error.message);
     console.error('📚 [Agent Server] Stack:', error.stack);
@@ -392,7 +432,11 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
  */
 
 const { buildCategorizationPrompt } = require('./categorization/prompt');
-const { deduplicateAndSort, findMatchingRule, extractKeywords } = require('./categorization/search');
+const {
+  deduplicateAndSort,
+  findMatchingRule,
+  extractKeywords,
+} = require('./categorization/search');
 
 app.post('/api/suggest-categories', express.json(), async (req, res) => {
   const startTime = Date.now();
@@ -402,10 +446,10 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
     const {
       transactions,
       accountId,
-      categories,      // NEW: Frontend can send categories directly
-      rules,           // NEW: Frontend can send rules directly
-      historicalTransactions,  // NEW: Frontend can send historical data
-      actualBudgetUrl  // LEGACY: For backwards compatibility
+      categories, // NEW: Frontend can send categories directly
+      rules, // NEW: Frontend can send rules directly
+      historicalTransactions, // NEW: Frontend can send historical data
+      actualBudgetUrl, // LEGACY: For backwards compatibility
     } = req.body;
 
     if (!transactions || !Array.isArray(transactions)) {
@@ -426,11 +470,14 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
       console.log(`✅ [Agent 2] Using categories and rules from frontend`);
     } else {
       // LEGACY: Fetch from Actual Budget server (requires APIs to exist)
-      console.log(`⚠️  [Agent 2] LEGACY MODE: Fetching from server (deprecated)`);
+      console.log(
+        `⚠️  [Agent 2] LEGACY MODE: Fetching from server (deprecated)`,
+      );
 
       if (!accountId || !actualBudgetUrl) {
         return res.status(400).json({
-          error: 'When not providing categories/rules directly, accountId and actualBudgetUrl are required'
+          error:
+            'When not providing categories/rules directly, accountId and actualBudgetUrl are required',
         });
       }
 
@@ -450,7 +497,9 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
       activeRules = rulesData.rules;
     }
 
-    console.log(`✅ [Agent 2] Loaded ${userCategories.length} categories, ${activeRules.length} rules`);
+    console.log(
+      `✅ [Agent 2] Loaded ${userCategories.length} categories, ${activeRules.length} rules`,
+    );
 
     // Step 2: Group transactions by unique payee
     console.log('🔍 [Agent 2] Step 2: Grouping transactions by payee...');
@@ -474,7 +523,9 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
 
     if (historicalTransactions && Array.isArray(historicalTransactions)) {
       // Data provided directly by frontend (PREFERRED)
-      console.log(`✅ [Agent 2] Using ${historicalTransactions.length} historical transactions from frontend`);
+      console.log(
+        `✅ [Agent 2] Using ${historicalTransactions.length} historical transactions from frontend`,
+      );
 
       // Group historical transactions by payee
       for (const payee of uniquePayees) {
@@ -482,7 +533,11 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
 
         // Find all historical transactions for this payee (exact and fuzzy match)
         const matches = historicalTransactions.filter(tx => {
-          const historicalPayee = (tx.payeeName || tx.payee || '').toLowerCase();
+          const historicalPayee = (
+            tx.payeeName ||
+            tx.payee ||
+            ''
+          ).toLowerCase();
 
           // Exact match
           if (historicalPayee === payeeLower) return true;
@@ -498,16 +553,21 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
         payeeContext[payee] = deduplicateAndSort(matches);
 
         if (matches.length > 0) {
-          console.log(`  ✅ Found ${matches.length} historical transactions for "${payee}"`);
+          console.log(
+            `  ✅ Found ${matches.length} historical transactions for "${payee}"`,
+          );
         }
       }
-
     } else {
       // LEGACY: Fetch from Actual Budget server (requires APIs to exist)
-      console.log(`⚠️  [Agent 2] LEGACY MODE: Fetching historical data from server (deprecated)`);
+      console.log(
+        `⚠️  [Agent 2] LEGACY MODE: Fetching historical data from server (deprecated)`,
+      );
 
       if (!accountId || !actualBudgetUrl) {
-        console.log(`  ⚠️  Missing accountId or actualBudgetUrl, skipping historical search`);
+        console.log(
+          `  ⚠️  Missing accountId or actualBudgetUrl, skipping historical search`,
+        );
       } else {
         const baseUrl = actualBudgetUrl;
 
@@ -521,7 +581,9 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
               const { transactions: exactMatches } = await exactRes.json();
               if (exactMatches.length >= 5) {
                 payeeContext[payee] = deduplicateAndSort(exactMatches);
-                console.log(`  ✅ Exact match for "${payee}": ${exactMatches.length} transactions`);
+                console.log(
+                  `  ✅ Exact match for "${payee}": ${exactMatches.length} transactions`,
+                );
                 continue;
               }
             }
@@ -533,20 +595,27 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
             if (fuzzyRes.ok) {
               const { transactions: fuzzyMatches } = await fuzzyRes.json();
               payeeContext[payee] = deduplicateAndSort(fuzzyMatches);
-              console.log(`  🔍 Fuzzy match for "${payee}": ${fuzzyMatches.length} transactions`);
+              console.log(
+                `  🔍 Fuzzy match for "${payee}": ${fuzzyMatches.length} transactions`,
+              );
             } else {
               payeeContext[payee] = [];
               console.log(`  ❌ No matches for "${payee}"`);
             }
           } catch (error) {
-            console.error(`  ❌ Error fetching history for "${payee}":`, error.message);
+            console.error(
+              `  ❌ Error fetching history for "${payee}":`,
+              error.message,
+            );
             payeeContext[payee] = [];
           }
         }
       }
     }
 
-    console.log(`✅ [Agent 2] Built context for ${Object.keys(payeeContext).length} payees`);
+    console.log(
+      `✅ [Agent 2] Built context for ${Object.keys(payeeContext).length} payees`,
+    );
 
     // Step 4: Categorize each transaction
     console.log('🔍 [Agent 2] Step 4: Categorizing transactions...');
@@ -562,7 +631,9 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
       const ruleMatch = findMatchingRule(transaction, activeRules);
 
       if (ruleMatch.matched) {
-        const category = userCategories.find(c => c.id === ruleMatch.categoryId);
+        const category = userCategories.find(
+          c => c.id === ruleMatch.categoryId,
+        );
         suggestions.push({
           transaction_id: transaction.id,
           category: category?.name || null,
@@ -588,7 +659,9 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
             reasoning: `Used ${topCategory.frequency} times historically for similar transactions`,
             source: 'history',
           });
-          console.log(`  📊 Auto-categorized "${payee}": ${topCategory.categoryName} (freq: ${topCategory.frequency})`);
+          console.log(
+            `  📊 Auto-categorized "${payee}": ${topCategory.categoryName} (freq: ${topCategory.frequency})`,
+          );
           continue;
         }
       }
@@ -615,23 +688,29 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
 
       try {
         const message = await anthropic.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-3-5-sonnet-latest',
           max_tokens: 1024,
           temperature: 0,
-          messages: [{
-            role: 'user',
-            content: promptResult.prompt,
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: promptResult.prompt,
+            },
+          ],
         });
 
         const responseText = message.content[0].text;
-        console.log(`  📝 Claude response: ${responseText.substring(0, 100)}...`);
+        console.log(
+          `  📝 Claude response: ${responseText.substring(0, 100)}...`,
+        );
 
         // Parse Claude's JSON response
         const claudeResult = JSON.parse(responseText);
 
         // Map category name to ID
-        const category = userCategories.find(c => c.name === claudeResult.category);
+        const category = userCategories.find(
+          c => c.name === claudeResult.category,
+        );
 
         suggestions.push({
           transaction_id: transaction.id,
@@ -642,8 +721,9 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
           source: 'claude',
         });
 
-        console.log(`  ✅ Claude suggested: ${claudeResult.category} (${claudeResult.confidence})`);
-
+        console.log(
+          `  ✅ Claude suggested: ${claudeResult.category} (${claudeResult.confidence})`,
+        );
       } catch (error) {
         console.error(`  ❌ Claude error for "${payee}":`, error.message);
         suggestions.push({
@@ -672,7 +752,6 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
         durationMs: duration,
       },
     });
-
   } catch (error) {
     console.error('\n❌ [Agent 2] Error:', error);
     res.status(500).json({
@@ -686,14 +765,20 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'Anthropic PDF Agent Server',
-    apiKeyConfigured: !!process.env.VITE_ANTHROPIC_API_KEY
+    apiKeyConfigured: !!process.env.VITE_ANTHROPIC_API_KEY,
   });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`\n🚀 Anthropic Agent Server running on http://localhost:${PORT}`);
-  console.log(`📡 Agent 1 (PDF Parser): POST http://localhost:${PORT}/api/process-pdf`);
-  console.log(`🎯 Agent 2 (Categorizer): POST http://localhost:${PORT}/api/suggest-categories`);
+  console.log(
+    `\n🚀 Anthropic Agent Server running on http://localhost:${PORT}`,
+  );
+  console.log(
+    `📡 Agent 1 (PDF Parser): POST http://localhost:${PORT}/api/process-pdf`,
+  );
+  console.log(
+    `🎯 Agent 2 (Categorizer): POST http://localhost:${PORT}/api/suggest-categories`,
+  );
   console.log(`🏥 Health check: GET http://localhost:${PORT}/health\n`);
 });
