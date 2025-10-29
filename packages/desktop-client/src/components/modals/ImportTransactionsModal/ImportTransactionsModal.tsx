@@ -502,7 +502,8 @@ export function ImportTransactionsModal({
     skipLines,
     fallbackMissingPayeeToMemo,
     importNotes,
-    parse,
+    // parse removed from dependencies to prevent infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
   function onSplitMode() {
