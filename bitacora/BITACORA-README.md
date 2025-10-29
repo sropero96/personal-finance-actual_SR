@@ -1,11 +1,14 @@
 # Bitácora de Desarrollo - Actual Budget
 
-## 2025-10-29: Fix Claude Model Deprecation + Web Worker Environment Detection
+## 2025-10-29: Fix Claude Model + Web Worker Environment Detection
 
 ### Objetivo
 Resolver fallas en producción del sistema de importación de PDFs:
 1. Detección incorrecta de entorno en Web Workers (mostraba "localhost" en producción)
-2. Error de modelo Claude deprecado (`claude-3-5-sonnet-20241022` → `not_found_error`)
+2. Error de modelo Claude deprecado/no válido
+   - `claude-3-5-sonnet-20241022` → `not_found_error`
+   - `claude-3-5-sonnet-latest` → `not_found_error`
+   - **SOLUCIÓN FINAL**: `claude-haiku-4-5` ✅
 
 ### Issues Encontrados y Resueltos
 
@@ -54,6 +57,25 @@ const location = typeof self !== 'undefined' && self.location
 
 **Commit**: `e17dd8ea` - "fix(agent-server): Update deprecated Claude model to latest version"
 
+#### Issue 3: Claude Model Still Invalid (✅ Resuelto)
+**Problema**:
+- Después del deploy con `claude-3-5-sonnet-latest`, seguía fallando
+- Console logs: `"model: claude-3-5-sonnet-latest"`, `"type":"not_found_error"`
+- El modelo "latest" tampoco es válido en la API de Anthropic
+
+**Investigación**:
+- Consultado documentación oficial de Anthropic
+- Nuevo modelo lanzado: Claude Haiku 4.5
+- Nombre oficial del modelo: `claude-haiku-4-5`
+- Fuente: https://www.anthropic.com/news/claude-haiku-4-5
+
+**Solución**:
+- Actualizar a `claude-haiku-4-5` en ambos agentes
+- Línea 304: Agent 1 (PDF Parser)
+- Línea 691: Agent 2 (Category Suggester)
+
+**Commit**: `dbbd3d97` - "fix(agent-server): Update to Claude Haiku 4.5 model"
+
 ### Deploys Realizados
 
 #### Deploy 1: Web Worker Fix (✅ Completado)
@@ -68,13 +90,21 @@ fly deploy --config fly.actual.toml
 - **Nuevo worker bundle**: `kcab.worker.CdPtxaIO.js` (reemplaza `B8D6AquI.js`)
 - **Resultado**: Environment detection correcta en production
 
-#### Deploy 2: Claude Model Update (✅ Completado)
+#### Deploy 2: Claude Model Update (❌ Falló - modelo inválido)
 ```bash
 fly deploy --config fly.agent.toml
 ```
+- **Modelo usado**: `claude-3-5-sonnet-latest`
+- **Resultado**: Modelo no válido, mismo error 404
+
+#### Deploy 3: Haiku 4.5 Model (✅ Completado - PRODUCCIÓN FINAL)
+```bash
+fly deploy --config fly.agent.toml
+```
+- **Modelo**: `claude-haiku-4-5` (nuevo modelo de Anthropic)
 - **Image size**: 76 MB
 - **Build time**: ~2 minutos (cached layers)
-- **Machine**: 6e82959fd43d68 (version 8)
+- **Machine**: 6e82959fd43d68 (version 9)
 - **Health checks**: 2/2 passing
 - **Status**: ✅ Running
 
@@ -87,10 +117,10 @@ curl https://actual-agent-sr.fly.dev/health
 ```
 
 #### Fly.io Status
-| App | Machine ID | Version | Status | Health Checks |
-|-----|------------|---------|--------|---------------|
-| actual-agent-sr | 6e82959fd43d68 | 8 | ✅ started | 2/2 passing |
-| actual-budget-sr | 286ed00a6d65d8 | - | ✅ started | 1/1 passing |
+| App | Machine ID | Version | Status | Health Checks | Model |
+|-----|------------|---------|--------|---------------|-------|
+| actual-agent-sr | 6e82959fd43d68 | 9 | ✅ started | 2/2 passing | claude-haiku-4-5 |
+| actual-budget-sr | 286ed00a6d65d8 | - | ✅ started | 1/1 passing | - |
 
 ### Próximos Pasos
 1. **Testing manual** - Usuario debe probar importación de PDF en https://actual-budget-sr.fly.dev
@@ -98,8 +128,9 @@ curl https://actual-agent-sr.fly.dev/health
 3. **Monitorear** - Revisar logs para errores: `fly logs -a actual-agent-sr`
 
 ### Commits Relacionados
-- **2d1884ce**: fix(agents): Improve environment detection for Agent Server URL
-- **e17dd8ea**: fix(agent-server): Update deprecated Claude model to latest version
+- **2d1884ce**: fix(agents): Improve environment detection for Agent Server URL (Web Worker fix)
+- **e17dd8ea**: fix(agent-server): Update deprecated Claude model to latest version (falló - modelo inválido)
+- **dbbd3d97**: fix(agent-server): Update to Claude Haiku 4.5 model (✅ PRODUCCIÓN FINAL)
 
 ---
 
