@@ -20,14 +20,16 @@
  * - ANTHROPIC_AGENT_URL: URL of agent server (defaults to http://localhost:4000)
  */
 
-import { logger } from '../../../platform/server/log';
 import * as fs from '../../../platform/server/fs';
+import { logger } from '../../../platform/server/log';
 
 export type ClaudeTransaction = {
   date: string;
   payee: string;
   notes: string;
-  category: string;
+  // Category is optional - Claude may suggest it but Agent 1 doesn't use it
+  // Agent 2 (Autocategorization) handles category suggestions separately
+  category?: string;
   amount: number;
   confidence: number;
 };
@@ -47,14 +49,25 @@ export type ClaudePDFResponse = {
  *
  * Sends PDF to Agent Server which uses Claude API with agent tools
  */
-export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFResponse> {
+export async function processPDFWithClaude(
+  filepath: string,
+): Promise<ClaudePDFResponse> {
   // Determine agent server URL based on environment
-  // More robust detection: check hostname first (most reliable in browser)
+  // More robust detection: use self.location (works in both main thread and Web Workers)
   let isProduction = false;
   let hostname = 'unknown';
 
-  if (typeof window !== 'undefined') {
-    hostname = window.location.hostname;
+  // Try self.location first (works in both main thread and Web Workers)
+  // Fallback to window.location for compatibility
+  // @ts-ignore - self exists in both contexts
+  const location = typeof self !== 'undefined' && self.location
+    ? self.location
+    : typeof window !== 'undefined'
+    ? window.location
+    : null;
+
+  if (location && location.hostname) {
+    hostname = location.hostname;
     // Production: Fly.io deployment or any non-localhost hostname
     isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
   } else {
@@ -66,10 +79,16 @@ export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFR
     ? 'https://actual-agent-sr.fly.dev'
     : 'http://localhost:4000';
 
-  logger.info('[Claude PDF Processor] Starting AGENT-based PDF processing:', filepath);
+  logger.info(
+    '[Claude PDF Processor] Starting AGENT-based PDF processing:',
+    filepath,
+  );
   logger.info('[Claude PDF Processor] Hostname:', hostname);
   logger.info('[Claude PDF Processor] Agent Server:', agentServerUrl);
-  logger.info('[Claude PDF Processor] Environment:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
+  logger.info(
+    '[Claude PDF Processor] Environment:',
+    isProduction ? 'PRODUCTION' : 'DEVELOPMENT',
+  );
 
   try {
     // Step 1: Read PDF file as binary
@@ -78,7 +97,11 @@ export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFR
       throw new Error('PDF file is empty or could not be read');
     }
 
-    logger.info('[Claude PDF Processor] PDF file read successfully, size:', pdfData.length, 'bytes');
+    logger.info(
+      '[Claude PDF Processor] PDF file read successfully, size:',
+      pdfData.length,
+      'bytes',
+    );
 
     // Step 2: Create FormData to send PDF to Agent Server
     const formData = new FormData();
@@ -99,7 +122,9 @@ export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFR
     }
 
     formData.append('pdf', blob, 'statement.pdf');
-    logger.info('[Claude PDF Processor] FormData prepared, sending to Agent Server...');
+    logger.info(
+      '[Claude PDF Processor] FormData prepared, sending to Agent Server...',
+    );
 
     // Step 3: Send to Agent Server
     const response = await fetch(`${agentServerUrl}/api/process-pdf`, {
@@ -107,7 +132,11 @@ export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFR
       body: formData,
     });
 
-    logger.info('[Claude PDF Processor] Agent Server response status:', response.status, response.statusText);
+    logger.info(
+      '[Claude PDF Processor] Agent Server response status:',
+      response.status,
+      response.statusText,
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -116,14 +145,22 @@ export async function processPDFWithClaude(filepath: string): Promise<ClaudePDFR
     }
 
     const result = await response.json();
-    logger.info('[Claude PDF Processor] Agent Server returned JSON successfully');
+    logger.info(
+      '[Claude PDF Processor] Agent Server returned JSON successfully',
+    );
 
-    logger.info('[Claude PDF Processor] Successfully parsed', result.transactions.length, 'transactions');
+    logger.info(
+      '[Claude PDF Processor] Successfully parsed',
+      result.transactions.length,
+      'transactions',
+    );
     logger.info('[Claude PDF Processor] Bank:', result.bankName);
-    logger.info('[Claude PDF Processor] Extraction complete:', result.extractionComplete);
+    logger.info(
+      '[Claude PDF Processor] Extraction complete:',
+      result.extractionComplete,
+    );
 
     return result;
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('[Claude PDF Processor] Processing failed:', errorMessage);

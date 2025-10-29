@@ -14,11 +14,21 @@ import {
 } from 'loot-core/types/models';
 
 // Agent Server configuration
-// More robust detection: check hostname first (most reliable in browser)
+// More robust detection: use self.location (works in both main thread and Web Workers)
 let isProduction = false;
+let hostname = 'unknown';
 
-if (typeof window !== 'undefined') {
-  const hostname = window.location.hostname;
+// Try self.location first (works in both main thread and Web Workers)
+// Fallback to window.location for compatibility
+// @ts-ignore - self exists in both contexts
+const location = typeof self !== 'undefined' && self.location
+  ? self.location
+  : typeof window !== 'undefined'
+  ? window.location
+  : null;
+
+if (location && location.hostname) {
+  hostname = location.hostname;
   // Production: Fly.io deployment or any non-localhost hostname
   isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
 } else {
