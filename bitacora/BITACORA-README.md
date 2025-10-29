@@ -1,6 +1,63 @@
 # Bitácora de Desarrollo - Actual Budget
 
-## 2025-10-29: Modal Children Render Prop Bug - RESUELTO ✅
+## 2025-10-29: Redux isHidden Stale State - SOLUCIÓN FINAL ✅
+
+### Problema Real (Identificado con Subagente)
+El modal estaba **invisible** (opacity: 0) debido a estado Redux obsoleto:
+- `modalState.isHidden: true` ❌
+- `appState.loadingText: null` ✓
+- `transactions.length: 93` ✓
+
+**Contradicción**: Si `loadingText === null`, entonces `isHidden` debería ser `false`, pero era `true`.
+
+### Causa Raíz
+El reducer `pushModal` **NO reseteaba `isHidden`** al abrir un modal.
+
+**Flujo del Bug:**
+1. Una operación anterior ejecuta `setAppState({ loadingText: 'Loading...' })`
+2. El reducer pone `isHidden = true` (oculta todos los modals)
+3. La operación termina pero **NO limpia `isHidden`**
+4. Usuario abre modal de importación
+5. `isHidden` sigue siendo `true` (estado stale/obsoleto)
+6. Modal se renderiza pero con `opacity: 0` (invisible)
+
+### Solución Implementada (Versión 50)
+
+**Archivo**: `packages/desktop-client/src/modals/modalsSlice.ts`
+
+**Línea 650** (reducer `pushModal`):
+```typescript
+state.modalStack = [...state.modalStack, modal];
+state.isHidden = false;  // ← AGREGADO: Reset al abrir modal
+```
+
+**Línea 656** (reducer `replaceModal`):
+```typescript
+state.modalStack = [modal];
+state.isHidden = false;  // ← AGREGADO: Reset al reemplazar modal
+```
+
+**Lógica**: Cuando se abre cualquier modal, debe ser visible por defecto. Solo `setAppState` (operaciones de carga global) puede ocultarlo.
+
+### Deploy Final
+```bash
+yarn workspace loot-core build:browser
+yarn workspace @actual-app/web build:browser
+fly deploy --config fly.actual.toml
+```
+
+**Status**: ✅ RESUELTO DEFINITIVAMENTE
+**URL**: https://actual-budget-sr.fly.dev
+**Machine**: 286ed00a6d65d8 (version 50)
+**Commit**: `86b65b8b` - "fix(modals): Reset isHidden state when modal opens to prevent stale state"
+
+### Créditos
+- **Análisis de causa raíz**: Subagente general-purpose
+- **Implementación**: Manual siguiendo recomendación del subagente (Opción 1)
+
+---
+
+## 2025-10-29: Modal Children Render Prop Bug - Investigación Previa
 
 ### Problema
 Las transacciones importadas desde PDFs no se mostraban en el modal de importación a pesar de:
