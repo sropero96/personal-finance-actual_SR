@@ -15,21 +15,21 @@ graph TB
         LOCAL_DB[(🗄️ SQLite Local<br/>db.sqlite)]
         WEB_STORAGE[🌐 IndexedDB<br/>(Versión Web)]
     end
-    
+
     subgraph "☁️ Servidor de Sincronización (Opcional)"
         SYNC_SERVER[🔄 Sync Server]
         ACCOUNT_DB[(👥 account.sqlite<br/>Usuarios & Permisos)]
         USER_FILES[(📁 user-files/<br/>group-{id}.sqlite)]
         MESSAGES[(📨 Messages<br/>Cambios CRDT)]
     end
-    
+
     CLIENT --> LOCAL_DB
     CLIENT --> WEB_STORAGE
     CLIENT <--> SYNC_SERVER
     SYNC_SERVER --> ACCOUNT_DB
     SYNC_SERVER --> USER_FILES
     SYNC_SERVER --> MESSAGES
-    
+
     style LOCAL_DB fill:#e1f5fe
     style WEB_STORAGE fill:#f3e5f5
     style ACCOUNT_DB fill:#fff3e0
@@ -105,7 +105,8 @@ flowchart LR
     SQLITE_WASM --> SAME_SCHEMA[📊 Mismo esquema SQLite]
 ```
 
-**Tecnología**: 
+**Tecnología**:
+
 - **absurd-sql**: Adapta SQLite para funcionar en navegadores
 - **IndexedDB**: Storage nativo del navegador
 - **sql.js**: SQLite compilado a WebAssembly
@@ -121,9 +122,9 @@ sequenceDiagram
     participant D1 as 💻 Dispositivo 1
     participant SERVER as ☁️ Servidor
     participant D2 as 📱 Dispositivo 2
-    
+
     Note over D1,D2: Usuario hace cambios en cualquier dispositivo
-    
+
     D1->>D1: 🔄 Modifica transacción localmente
     D1->>SERVER: 📤 Envía mensaje CRDT encriptado
     SERVER->>SERVER: 💾 Almacena mensaje (sin desencriptar)
@@ -207,19 +208,19 @@ flowchart TD
         A2[🏷️ Genera mensaje CRDT]
         A3[📦 Timestamp: 2024-01-15T10:30:00.123Z]
     end
-    
+
     subgraph "💻 Dispositivo B"
         B1[📝 Usuario edita otra transacción]
         B2[🏷️ Genera mensaje CRDT]
         B3[📦 Timestamp: 2024-01-15T10:30:00.456Z]
     end
-    
+
     subgraph "☁️ Servidor"
         S1[📥 Recibe ambos mensajes]
         S2[⏰ Ordena por timestamp]
         S3[📤 Distribuye a todos los dispositivos]
     end
-    
+
     A1 --> A2 --> A3
     B1 --> B2 --> B3
     A3 --> S1
@@ -286,23 +287,23 @@ flowchart LR
         ENCRYPT[🔐 Encriptación Local]
         SEND[📤 Envío Encriptado]
     end
-    
+
     subgraph "☁️ Servidor"
         RECEIVE[📥 Recibe Encriptado]
         STORE[💾 Almacena Encriptado]
         FORWARD[📤 Reenvía Encriptado]
     end
-    
+
     subgraph "📱 Otro Cliente"
         RECV2[📥 Recibe Encriptado]
         DECRYPT[🔓 Desencripta Local]
         PLAIN2[📊 Datos en Claro]
     end
-    
+
     PLAIN --> ENCRYPT --> SEND
     SEND --> RECEIVE --> STORE
     STORE --> FORWARD --> RECV2 --> DECRYPT --> PLAIN2
-    
+
     style ENCRYPT fill:#ffebee
     style STORE fill:#ffebee
     style DECRYPT fill:#ffebee
@@ -328,14 +329,14 @@ sequenceDiagram
     participant L as 💾 SQLite Local
     participant S as ☁️ Servidor
     participant O as 📱 Otros Dispositivos
-    
+
     U->>C: Ingresa: "$45 - Starbucks"
     C->>C: 🔍 Valida datos
     C->>C: 🏷️ Auto-categoriza "Comida"
     C->>L: 💾 INSERT INTO transactions...
     C->>C: 📊 Actualiza presupuesto
     C->>U: ✅ Muestra confirmación
-    
+
     alt Sync habilitado
         C->>C: 🔐 Genera mensaje CRDT encriptado
         C->>S: 📤 Envía mensaje
@@ -364,14 +365,14 @@ flowchart LR
 
 ### 📈 **Limitaciones y Capacidades**
 
-| Aspecto | Local | Con Servidor |
-|---------|-------|--------------|
-| **Transacciones** | 500,000+ | Ilimitadas |
-| **Cuentas** | 100+ | Ilimitadas |
-| **Usuarios Concurrentes** | 1 | 1000+ |
-| **Dispositivos por Usuario** | N/A | 10+ |
-| **Almacenamiento** | Limitado por disco | Limitado por servidor |
-| **Latencia Queries** | <1ms | <50ms |
+| Aspecto                      | Local              | Con Servidor          |
+| ---------------------------- | ------------------ | --------------------- |
+| **Transacciones**            | 500,000+           | Ilimitadas            |
+| **Cuentas**                  | 100+               | Ilimitadas            |
+| **Usuarios Concurrentes**    | 1                  | 1000+                 |
+| **Dispositivos por Usuario** | N/A                | 10+                   |
+| **Almacenamiento**           | Limitado por disco | Limitado por servidor |
+| **Latencia Queries**         | <1ms               | <50ms                 |
 
 ### ⚡ **Optimizaciones de Rendimiento**
 
@@ -383,13 +384,13 @@ graph LR
         BATCH[📦 Batch Processing<br/>Múltiples cambios]
         LAZY[😴 Lazy Loading<br/>Datos bajo demanda]
     end
-    
+
     subgraph "📊 Resultados"
         FAST[⚡ Consultas <1ms]
         SMOOTH[🎯 UI responsive]
         EFFICIENT[💪 Uso eficiente memoria]
     end
-    
+
     INDEX --> FAST
     CACHE --> SMOOTH
     BATCH --> EFFICIENT
@@ -409,13 +410,13 @@ flowchart TD
         MANUAL[👤 Manuales<br/>Bajo demanda]
         EXPORT[📤 Export CSV/JSON]
     end
-    
+
     subgraph "☁️ Backups Remotos"
         SYNC[🔄 Sincronización<br/>Tiempo real]
         SNAPSHOT[📸 Snapshots<br/>Semanales]
         CLOUD[☁️ Cloud Storage<br/>Opcional]
     end
-    
+
     AUTO --> SNAPSHOT
     MANUAL --> EXPORT
     SYNC --> CLOUD
@@ -424,7 +425,7 @@ flowchart TD
 ### 🔄 **Proceso de Recuperación**
 
 1. **📱 Pérdida de Dispositivo**: Instalar app + login = datos restaurados
-2. **💾 Corrupción Local**: Restaurar desde backup local más reciente  
+2. **💾 Corrupción Local**: Restaurar desde backup local más reciente
 3. **☁️ Pérdida Total**: Servidor mantiene copia de todos los cambios
 4. **🔐 Pérdida de Contraseña**: Los datos quedan encriptados para siempre
 
@@ -452,12 +453,12 @@ graph TB
         USER[👤 Usuario]
         DEVICES[📱 Múltiples Dispositivos]
     end
-    
+
     subgraph "🖥️ Servidor Propio"
         SERVER[☁️ Actual Server]
         STORAGE[(💾 Bases de Datos)]
     end
-    
+
     USER --> DEVICES
     DEVICES <--> SERVER
     SERVER --> STORAGE
@@ -482,15 +483,15 @@ graph TB
 
 ## 📊 **10. Comparación con Alternativas**
 
-| Característica | Actual Budget | Mint | YNAB | Personal Capital |
-|----------------|---------------|------|------|------------------|
-| **Datos Locales** | ✅ Sí | ❌ No | ❌ No | ❌ No |
-| **Encriptación E2E** | ✅ Sí | ❌ No | ❌ No | ❌ No |
-| **Self-hosted** | ✅ Sí | ❌ No | ❌ No | ❌ No |
-| **Offline** | ✅ Sí | ❌ No | ❌ No | ❌ No |
-| **Open Source** | ✅ Sí | ❌ No | ❌ No | ❌ No |
-| **Costo** | 🆓 Gratis | 🆓 Gratis | 💰 $14/mes | 🆓 Gratis |
-| **Bank Sync** | 🔄 Manual | ✅ Auto | ✅ Auto | ✅ Auto |
+| Característica       | Actual Budget | Mint      | YNAB       | Personal Capital |
+| -------------------- | ------------- | --------- | ---------- | ---------------- |
+| **Datos Locales**    | ✅ Sí         | ❌ No     | ❌ No      | ❌ No            |
+| **Encriptación E2E** | ✅ Sí         | ❌ No     | ❌ No      | ❌ No            |
+| **Self-hosted**      | ✅ Sí         | ❌ No     | ❌ No      | ❌ No            |
+| **Offline**          | ✅ Sí         | ❌ No     | ❌ No      | ❌ No            |
+| **Open Source**      | ✅ Sí         | ❌ No     | ❌ No      | ❌ No            |
+| **Costo**            | 🆓 Gratis     | 🆓 Gratis | 💰 $14/mes | 🆓 Gratis        |
+| **Bank Sync**        | 🔄 Manual     | ✅ Auto   | ✅ Auto    | ✅ Auto          |
 
 ---
 
@@ -517,19 +518,19 @@ graph TB
 ```mermaid
 timeline
     title Roadmap de Almacenamiento
-    
+
     Presente : SQLite Local
              : CRDT Sync
              : Encriptación E2E
-    
+
     2024 Q4  : Backup Automático Cloud
              : Compresión de Datos
              : Sharding para Grandes Datasets
-    
+
     2025 Q1  : Mobile Offline Sync
              : Conflict Resolution UI
              : Advanced Encryption
-    
+
     2025 Q2  : Distributed Architecture
              : Multi-server Replication
              : Advanced Analytics Engine
@@ -539,4 +540,4 @@ timeline
 
 **🎓 Este modelo de almacenamiento representa la evolución natural de las aplicaciones financieras: devolver el control de los datos a los usuarios sin sacrificar funcionalidad o experiencia.**
 
-*📝 Documento técnico generado para explicar la arquitectura de almacenamiento y persistencia de datos en Actual Budget*
+_📝 Documento técnico generado para explicar la arquitectura de almacenamiento y persistencia de datos en Actual Budget_

@@ -1,10 +1,12 @@
 // @ts-strict-ignore
+import pdfParse from 'pdf-parse';
+
 import * as fs from '../../../platform/server/fs';
 import { logger } from '../../../platform/server/log';
+
 import type { ParseFileResult } from './parse-file';
 
 // Import pdf-parse for text extraction
-import pdfParse from 'pdf-parse';
 
 /**
  * PDF Adapter - Extracts transactions from Spanish bank PDF statements
@@ -17,10 +19,10 @@ import pdfParse from 'pdf-parse';
  */
 
 type PDFTransaction = {
-  date: string;        // YYYY-MM-DD format
+  date: string; // YYYY-MM-DD format
   description: string; // Transaction description/payee
-  amount: number;      // Negative for expenses, positive for income
-  balance?: number;    // Account balance after transaction (optional)
+  amount: number; // Negative for expenses, positive for income
+  balance?: number; // Account balance after transaction (optional)
 };
 
 type PDFParseResult = {
@@ -57,10 +59,15 @@ function detectBank(text: string): 'santander' | 'revolut' | 'unknown' {
 /**
  * Extract account number from PDF text
  */
-function extractAccountNumber(text: string, bankType: string): string | undefined {
+function extractAccountNumber(
+  text: string,
+  bankType: string,
+): string | undefined {
   if (bankType === 'santander') {
     // Santander account format: ES XX XXXX XXXX XXXX XXXX XXXX or similar
-    const ibanMatch = text.match(/ES\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}/i);
+    const ibanMatch = text.match(
+      /ES\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}/i,
+    );
     if (ibanMatch) return ibanMatch[0].replace(/\s/g, '');
 
     // Alternative: Last 4 digits pattern
@@ -81,9 +88,18 @@ function extractAccountNumber(text: string, bankType: string): string | undefine
  * Spanish month names to numbers mapping
  */
 const SPANISH_MONTHS: Record<string, string> = {
-  ene: '01', feb: '02', mar: '03', abr: '04',
-  may: '05', jun: '06', jul: '07', ago: '08',
-  sep: '09', oct: '10', nov: '11', dic: '12'
+  ene: '01',
+  feb: '02',
+  mar: '03',
+  abr: '04',
+  may: '05',
+  jun: '06',
+  jul: '07',
+  ago: '08',
+  sep: '09',
+  oct: '10',
+  nov: '11',
+  dic: '12',
 };
 
 /**
@@ -104,7 +120,9 @@ function parseDate(dateStr: string): string | null {
   }
 
   // Pattern 2: Spanish month format - "4 ago 2025"
-  const spanishMatch = cleaned.match(/(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\s+(\d{4})/i);
+  const spanishMatch = cleaned.match(
+    /(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\s+(\d{4})/i,
+  );
   if (spanishMatch) {
     const day = spanishMatch[1].padStart(2, '0');
     const monthStr = spanishMatch[2].toLowerCase();
@@ -125,12 +143,16 @@ function parseDate(dateStr: string): string | null {
  * - International format: €1,234.56 or €1234.56 (decimal: dot) - Revolut
  * Returns negative for expenses, positive for income
  */
-function parseAmount(amountStr: string, bankType?: 'santander' | 'revolut'): number | null {
+function parseAmount(
+  amountStr: string,
+  bankType?: 'santander' | 'revolut',
+): number | null {
   // Remove whitespace
   let cleaned = amountStr.trim();
 
   // Handle negative amounts in parentheses or with minus sign
-  const isNegative = cleaned.includes('(') || cleaned.includes('-') || cleaned.includes('−');
+  const isNegative =
+    cleaned.includes('(') || cleaned.includes('-') || cleaned.includes('−');
 
   // Remove currency symbols, parentheses, and non-numeric chars except dots and commas
   cleaned = cleaned.replace(/[€$£\(\)\-−\sEUR]/gi, '');
@@ -182,7 +204,8 @@ function parseSantanderPDF(text: string): PDFParseResult {
   // The pattern captures: date, description (limited length), amount, and balance
   // Example: "25/07/2025 Fecha valor:25/07/2025 Pago Movil...Madrid-15,13 EUR9.424,46 EUR"
   // Limit description to 200 chars to avoid greedy matching
-  const tablePattern = /(\d{2}\/\d{2}\/\d{4})[^€]{1,200}?([\-−]?[\d.,]+)\s*EUR([\d.,]+)\s*EUR/gi;
+  const tablePattern =
+    /(\d{2}\/\d{2}\/\d{4})[^€]{1,200}?([\-−]?[\d.,]+)\s*EUR([\d.,]+)\s*EUR/gi;
 
   let match;
   const seenTransactions = new Set<string>();
@@ -247,7 +270,8 @@ function parseSantanderPDF(text: string): PDFParseResult {
   if (transactions.length === 0) {
     logger.info('[PDF Adapter] Trying header pattern for Santander');
 
-    const headerPattern = /Saldo:([\d.,]+)\s*EUR[^a]*a\s*fecha(\d{2}\/\d{2}\/\d{4})([^:]+):([\d.,\-−]+)\s*EUR/gi;
+    const headerPattern =
+      /Saldo:([\d.,]+)\s*EUR[^a]*a\s*fecha(\d{2}\/\d{2}\/\d{4})([^:]+):([\d.,\-−]+)\s*EUR/gi;
 
     while ((match = headerPattern.exec(text)) !== null) {
       const balanceStr = match[1];
@@ -284,14 +308,19 @@ function parseSantanderPDF(text: string): PDFParseResult {
     }
   }
 
-  logger.info(`[PDF Adapter] Found ${transactions.length} Santander transactions`);
+  logger.info(
+    `[PDF Adapter] Found ${transactions.length} Santander transactions`,
+  );
 
   return {
     bankName: 'Santander España',
     accountNumber,
     transactions,
     success: transactions.length > 0,
-    error: transactions.length === 0 ? 'No transactions found in Santander PDF' : undefined,
+    error:
+      transactions.length === 0
+        ? 'No transactions found in Santander PDF'
+        : undefined,
   };
 }
 
@@ -307,13 +336,14 @@ function parseRevolutPDF(text: string): PDFParseResult {
   const accountNumber = extractAccountNumber(text, 'revolut');
 
   // Spanish month date format: "3 jul 2025"
-  const dateRegex = '\\d{1,2}\\s+(?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\\s+\\d{4}';
+  const dateRegex =
+    '\\d{1,2}\\s+(?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\\s+\\d{4}';
 
   // Pattern: [date1][date2][description]€[amount]€[balance]
   // Limit description to avoid greedy matching
   const transactionPattern = new RegExp(
     `(${dateRegex})(${dateRegex})([^€]{1,150}?)€([\\d.,]+)€([\\d.,]+)`,
-    'gi'
+    'gi',
   );
 
   let match;
@@ -377,21 +407,28 @@ function parseRevolutPDF(text: string): PDFParseResult {
     transactions.push(transaction);
   }
 
-  logger.info(`[PDF Adapter] Found ${transactions.length} Revolut transactions`);
+  logger.info(
+    `[PDF Adapter] Found ${transactions.length} Revolut transactions`,
+  );
 
   return {
     bankName: 'Revolut',
     accountNumber,
     transactions,
     success: transactions.length > 0,
-    error: transactions.length === 0 ? 'No transactions found in Revolut PDF' : undefined,
+    error:
+      transactions.length === 0
+        ? 'No transactions found in Revolut PDF'
+        : undefined,
   };
 }
 
 /**
  * Extract transactions from PDF using direct parsing
  */
-async function extractTransactionsFromPDF(filepath: string): Promise<PDFParseResult> {
+async function extractTransactionsFromPDF(
+  filepath: string,
+): Promise<PDFParseResult> {
   logger.info('[PDF Adapter] Starting extraction for:', filepath);
 
   try {
@@ -435,10 +472,10 @@ async function extractTransactionsFromPDF(filepath: string): Promise<PDFParseRes
           bankName: 'Unknown',
           transactions: [],
           success: false,
-          error: 'Could not detect bank type. Only Santander and Revolut PDFs are supported.',
+          error:
+            'Could not detect bank type. Only Santander and Revolut PDFs are supported.',
         };
     }
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('[PDF Adapter] Extraction failed:', errorMessage);
@@ -455,9 +492,7 @@ async function extractTransactionsFromPDF(filepath: string): Promise<PDFParseRes
 /**
  * Maps PDF transactions to Actual Budget transaction format
  */
-function mapToActualTransactions(
-  pdfResult: PDFParseResult,
-): Array<{
+function mapToActualTransactions(pdfResult: PDFParseResult): Array<{
   amount: number;
   date: string;
   payee_name: string | null;
@@ -492,7 +527,10 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
     // Validate file exists and can be read
     const fileBuffer = await fs.readFile(filepath, 'binary');
 
-    if (!fileBuffer || (Buffer.isBuffer(fileBuffer) && fileBuffer.length === 0)) {
+    if (
+      !fileBuffer ||
+      (Buffer.isBuffer(fileBuffer) && fileBuffer.length === 0)
+    ) {
       throw new Error('PDF file is empty or could not be read');
     }
 
@@ -503,7 +541,9 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
 
     // Check for extraction errors
     if (!pdfResult.success) {
-      throw new Error(pdfResult.error || 'Failed to extract transactions from PDF');
+      throw new Error(
+        pdfResult.error || 'Failed to extract transactions from PDF',
+      );
     }
 
     // Map to Actual Budget format

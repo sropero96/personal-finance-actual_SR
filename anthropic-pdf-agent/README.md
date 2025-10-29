@@ -179,6 +179,7 @@ API key must start with `sk-ant-`. Get a valid key from https://console.anthropi
 ### "Could not resolve authentication method"
 
 Server is running without API key. Check:
+
 1. `.env` file exists with valid key
 2. Server was restarted after adding `.env`
 3. For Fly.io: secret is set with `fly secrets set`

@@ -5,6 +5,7 @@
 Actual Budget es una herramienta de finanzas personales que funciona bajo el principio de "local-first" (primero local). Esto significa que tus datos viven principalmente en tu dispositivo, garantizando privacidad y control total sobre tu información financiera, con capacidad de sincronización opcional entre dispositivos.
 
 ### 🔑 Características Principales
+
 - ✅ **100% Gratuito y Open Source**
 - 🔒 **Privacidad Total** - Tus datos permanecen en tu dispositivo
 - 🔄 **Sincronización Opcional** - Comparte datos entre dispositivos si lo deseas
@@ -21,22 +22,22 @@ graph TB
         WEB[🌐 Web App<br/>React + TypeScript]
         DESKTOP[💻 Desktop App<br/>Electron]
     end
-    
+
     subgraph "Core Engine"
         CORE[⚡ Loot-Core<br/>Business Logic Engine]
         DB[(🗄️ SQLite Database<br/>Local Storage)]
     end
-    
+
     subgraph "Synchronization Layer"
         SYNC[🔄 Sync Server<br/>Node.js + Express]
         CRDT[📊 CRDT Engine<br/>Conflict Resolution]
     end
-    
+
     subgraph "Infrastructure"
         DOCKER[🐳 Docker<br/>Containerization]
         API[🔌 API Layer<br/>External Integrations]
     end
-    
+
     WEB --> CORE
     DESKTOP --> CORE
     CORE --> DB
@@ -53,6 +54,7 @@ graph TB
 ### 1. 🎨 **Frontend - Interfaces de Usuario**
 
 #### **Web Application (@actual-app/web)**
+
 - **Propósito**: Interfaz web principal que funciona en cualquier navegador
 - **Tecnología**: React + TypeScript + Vite
 - **Características**:
@@ -62,6 +64,7 @@ graph TB
   - Interfaz responsive para diferentes dispositivos
 
 #### **Desktop Application (desktop-electron)**
+
 - **Propósito**: Aplicación nativa para escritorio
 - **Tecnología**: Electron (empaqueta la web app)
 - **Ventajas**:
@@ -81,13 +84,14 @@ graph LR
         RULES[📋 Rules Engine<br/>Auto-categorization]
         CALC[🧮 Calculations<br/>Reports & Analytics]
     end
-    
+
     BUDGET --> TRANS
     TRANS --> RULES
     RULES --> CALC
 ```
 
 **Responsabilidades**:
+
 - 💰 **Gestión de Presupuestos**: Implementa el sistema de "envelope budgeting"
 - 💳 **Procesamiento de Transacciones**: Import/export de bancos, categorización
 - 📊 **Cálculos Financieros**: Balances, proyecciones, reportes
@@ -96,6 +100,7 @@ graph LR
 ### 3. 🔄 **Servidor de Sincronización (sync-server)**
 
 #### **¿Para qué sirve?**
+
 Imagina que usas Actual en tu computadora de casa y en tu laptop del trabajo. El servidor de sincronización mantiene ambas versiones actualizadas automáticamente.
 
 ```mermaid
@@ -103,7 +108,7 @@ sequenceDiagram
     participant D1 as 💻 Dispositivo 1
     participant SS as 🔄 Sync Server
     participant D2 as 📱 Dispositivo 2
-    
+
     D1->>SS: Envía cambios locales
     SS->>SS: Procesa y almacena cambios
     SS->>D2: Notifica nuevos cambios
@@ -112,6 +117,7 @@ sequenceDiagram
 ```
 
 **Características**:
+
 - 🔒 **Opcional**: Puedes usar Actual completamente offline
 - 🏠 **Self-hosted**: Tú controlas dónde viven tus datos
 - 🔐 **Seguro**: Los datos están encriptados en tránsito y reposo
@@ -122,6 +128,7 @@ sequenceDiagram
 CRDT significa "Conflict-free Replicated Data Types". Es una tecnología que permite que múltiples dispositivos modifiquen los mismos datos sin crear conflictos.
 
 **Ejemplo práctico**:
+
 - En tu casa agregas una transacción de $50 en "Comida"
 - En el trabajo agregas otra de $30 en "Transporte"
 - Ambas se sincronizan automáticamente sin problemas
@@ -135,7 +142,7 @@ graph LR
         TOOLS[🛠️ External Tools<br/>YNAB, Mint Migration]
         EXPORT[📤 Export Formats<br/>CSV, PDF Reports]
     end
-    
+
     API[🔌 API Layer] --> BANKS
     API --> TOOLS
     API --> EXPORT
@@ -200,7 +207,7 @@ graph LR
     BUILD --> WEB[🌐 Web Bundle]
     BUILD --> DESKTOP[💻 Desktop Apps]
     BUILD --> SERVER[🔄 Server Image]
-    
+
     WEB --> DEPLOY1[🚀 Web Deploy]
     DESKTOP --> DEPLOY2[📦 App Packages]
     SERVER --> DEPLOY3[🐳 Docker Hub]
@@ -212,13 +219,13 @@ graph LR
 
 ### 🏠 **Opciones de Instalación**
 
-| Opción | Audiencia | Complejidad | Control |
-|--------|-----------|-------------|----------|
-| 🌐 **Web Local** | Usuarios técnicos | Media | Total |
-| 💻 **Desktop Apps** | Usuarios generales | Baja | Total |
-| ☁️ **PikaPods** | No técnicos | Muy baja | Medio |
-| 🚁 **Fly.io** | Semi-técnicos | Baja | Alto |
-| 🐳 **Docker Self-hosted** | Técnicos | Alta | Total |
+| Opción                    | Audiencia          | Complejidad | Control |
+| ------------------------- | ------------------ | ----------- | ------- |
+| 🌐 **Web Local**          | Usuarios técnicos  | Media       | Total   |
+| 💻 **Desktop Apps**       | Usuarios generales | Baja        | Total   |
+| ☁️ **PikaPods**           | No técnicos        | Muy baja    | Medio   |
+| 🚁 **Fly.io**             | Semi-técnicos      | Baja        | Alto    |
+| 🐳 **Docker Self-hosted** | Técnicos           | Alta        | Total   |
 
 ### 💰 **Modelo de Monetización**
 
@@ -247,7 +254,7 @@ sequenceDiagram
     participant U as 👤 Usuario
     participant C as 💻 Cliente
     participant S as 🔄 Servidor
-    
+
     U->>C: Ingresa datos financieros
     C->>C: 🔐 Encripta localmente
     C->>S: 📤 Envía datos encriptados
@@ -263,16 +270,19 @@ sequenceDiagram
 ### 📱 **Interfaces Principales**
 
 1. **📊 Dashboard**
+
    - Vista general del presupuesto
    - Gráficos de gastos por categoría
    - Alertas y notificaciones
 
 2. **💳 Gestión de Transacciones**
+
    - Import automático desde bancos
    - Categorización inteligente
    - Reglas automáticas
 
 3. **💰 Presupuesto (Envelope Method)**
+
    - Asignación de dinero a categorías
    - Seguimiento de gastos vs presupuesto
    - Proyecciones futuras
@@ -299,19 +309,19 @@ sequenceDiagram
 ```mermaid
 timeline
     title Roadmap del Producto
-    
+
     Presente : Core Features
              : Web + Desktop Apps
              : Basic Sync
-    
+
     Q1 2025  : Mobile App
              : Advanced Reports
              : AI Categorization
-    
+
     Q2 2025  : Bank Integrations
              : Goal Tracking
              : Family Sharing
-    
+
     Q3 2025  : Investment Tracking
              : Multi-currency
              : Advanced Analytics
@@ -351,4 +361,4 @@ Esta arquitectura permite que usuarios desde principiantes hasta expertos en fin
 
 ---
 
-*📝 Documento generado como Product Manager Overview - Para detalles técnicos específicos, consultar la documentación de desarrollo en `/docs/contributing/`*
+_📝 Documento generado como Product Manager Overview - Para detalles técnicos específicos, consultar la documentación de desarrollo en `/docs/contributing/`_

@@ -1,4 +1,5 @@
 # Actual Budget - PDF Import con Claude AI
+
 ## Product Documentation & Technical Overview
 
 **Versión:** 1.0
@@ -31,11 +32,13 @@ Una **extensión custom de Actual Budget** (software open-source de presupuesto 
 ### Problema que resuelve
 
 **Antes:**
+
 - Importar transacciones requería exportar CSVs desde el banco (no todos los bancos lo permiten)
 - Proceso manual, lento y propenso a errores
 - Muchos bancos españoles solo proveen extractos en PDF
 
 **Ahora:**
+
 - Upload directo de PDF del banco → transacciones listas en segundos
 - El AI lee, interpreta y cura las transacciones automáticamente
 - Soporta Santander España y Revolut España
@@ -54,6 +57,7 @@ Una **extensión custom de Actual Budget** (software open-source de presupuesto 
 ### Actual Budget Original
 
 [Actual Budget](https://actualbudget.com/) es un software de presupuesto personal **local-first**:
+
 - **Open Source**: Código disponible públicamente
 - **Privacy-first**: Los datos viven en el dispositivo del usuario
 - **Envelope Budgeting**: Metodología de presupuesto por sobres
@@ -62,11 +66,13 @@ Una **extensión custom de Actual Budget** (software open-source de presupuesto 
 ### Limitación identificada
 
 Actual Budget tiene importadores para:
+
 - ✅ CSV genéricos
 - ✅ OFX/QFX (Quicken formats)
 - ✅ Varios bancos US/UK con CSV export
 
 Pero **NO** para:
+
 - ❌ PDFs de extractos bancarios
 - ❌ Bancos españoles sin export CSV (Santander, BBVA, etc.)
 
@@ -155,6 +161,7 @@ Los bancos españoles **siempre** permiten descargar extractos en PDF. Si podemo
 Se decidió una **arquitectura de dos aplicaciones separadas** en Fly.io:
 
 #### 1. **actual-budget-sr** (Aplicación Principal)
+
 - **Propósito**: Actual Budget completo (frontend + sync server)
 - **Tamaño**: 297 MB
 - **Puerto**: 5006 (sync server)
@@ -166,6 +173,7 @@ Se decidió una **arquitectura de dos aplicaciones separadas** en Fly.io:
   - absurd-sql (SQLite en WebAssembly para browser)
 
 #### 2. **actual-agent-sr** (Agent Server)
+
 - **Propósito**: Procesar PDFs con Claude AI
 - **Tamaño**: 76 MB
 - **Puerto**: 4000
@@ -260,11 +268,15 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
 #### **Fase 2: Envío al Agent Server**
 
 4. **Frontend**: POST a `https://actual-agent-sr.fly.dev/api/process-pdf`
+
    ```typescript
-   const response = await fetch('https://actual-agent-sr.fly.dev/api/process-pdf', {
-     method: 'POST',
-     body: formData,
-   });
+   const response = await fetch(
+     'https://actual-agent-sr.fly.dev/api/process-pdf',
+     {
+       method: 'POST',
+       body: formData,
+     },
+   );
    ```
 
 5. **Agent Server**: Recibe PDF via Multer middleware
@@ -277,18 +289,20 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
 #### **Fase 3: Procesamiento con Claude**
 
 6. **Agent Server**: Lee PDF como Base64
+
    ```javascript
    const pdfBuffer = await fs.readFile(req.file.path);
    const pdfBase64 = pdfBuffer.toString('base64');
    ```
 
 7. **Agent Server**: Construye prompt especializado
+
    ```javascript
    const agentPrompt = `You are an expert Spanish bank statement extractor.
-
+   
    ⚠️ CRITICAL: This PDF may contain 10 or 100 transactions across multiple pages.
    You MUST process the ENTIRE document from first to last page.
-
+   
    Tasks:
    1. READ THE ENTIRE PDF (all pages)
    2. EXTRACT ALL TRANSACTIONS
@@ -303,22 +317,29 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
    const stream = await anthropic.messages.stream({
      model: 'claude-3-5-sonnet-20241022',
      max_tokens: 8192,
-     messages: [{
-       role: 'user',
-       content: [
-         {
-           type: 'document',
-           source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 }
-         },
-         { type: 'text', text: agentPrompt }
-       ]
-     }]
+     messages: [
+       {
+         role: 'user',
+         content: [
+           {
+             type: 'document',
+             source: {
+               type: 'base64',
+               media_type: 'application/pdf',
+               data: pdfBase64,
+             },
+           },
+           { type: 'text', text: agentPrompt },
+         ],
+       },
+     ],
    });
    ```
 
 #### **Fase 4: Procesamiento por Claude**
 
 9. **Claude AI**:
+
    - Lee PDF página por página usando Vision
    - Identifica el banco (Santander España)
    - Extrae cuenta: ES24 xxxx xxxx xxxx xxxx
@@ -326,6 +347,7 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
    - Extrae **transacciones** completas
 
 10. **Claude AI - Curación de Payees**:
+
     ```
     Input:  "Fecha valor: 17/07/2025 Pago Movil En La Mina, Madrid, Tarj. :*536242"
     Output: "La Mina, Madrid"
@@ -343,6 +365,7 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
 
 13. **Agent Server**: Retorna JSON al frontend
 14. **Frontend**: Valida cada transacción
+
     ```typescript
     for (const trans of transactions) {
       // Valida fecha
@@ -367,6 +390,7 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
     ```
 
 15. **Frontend**: Muestra modal con **transacciones**
+
     ```
     Import transactions (PDF)
     ✅ XX transactions found
@@ -386,6 +410,7 @@ Usuario          Actual Budget UI        Sync Server         Agent Server       
 ### 1. Frontend (Actual Budget UI)
 
 **Archivo principal modificado:**
+
 ```
 packages/desktop-client/src/components/modals/ImportTransactionsModal/ImportTransactionsModal.tsx
 ```
@@ -395,6 +420,7 @@ packages/desktop-client/src/components/modals/ImportTransactionsModal/ImportTran
 #### A. Validación de transacciones (Bug Fix Crítico)
 
 **ANTES (❌ Bug):**
+
 ```typescript
 // ❌ BUG: break detiene TODO el procesamiento
 for (const trans of transactions) {
@@ -406,6 +432,7 @@ for (const trans of transactions) {
 ```
 
 **DESPUÉS (✅ Fix):**
+
 ```typescript
 // ✅ FIX: continue salta solo esta transacción
 for (const trans of transactions) {
@@ -424,13 +451,18 @@ for (const trans of transactions) {
 const formData = new FormData();
 formData.append('pdf', file);
 
-const response = await fetch('https://actual-agent-sr.fly.dev/api/process-pdf', {
-  method: 'POST',
-  body: formData,
-});
+const response = await fetch(
+  'https://actual-agent-sr.fly.dev/api/process-pdf',
+  {
+    method: 'POST',
+    body: formData,
+  },
+);
 
 if (!response.ok) {
-  throw new Error(`Agent Server error (${response.status}): ${await response.text()}`);
+  throw new Error(
+    `Agent Server error (${response.status}): ${await response.text()}`,
+  );
 }
 
 const result = await response.json();
@@ -440,6 +472,7 @@ const result = await response.json();
 ### 2. Agent Server
 
 **Ubicación:**
+
 ```
 anthropic-pdf-agent/server.js
 ```
@@ -454,7 +487,7 @@ const PORT = 4000;
 // Multer para uploads
 const upload = multer({
   dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 // Anthropic client
@@ -479,13 +512,22 @@ app.post('/api/process-pdf', upload.single('pdf'), async (req, res) => {
     model: 'claude-3-5-sonnet-20241022',
     max_tokens: 8192,
     temperature: 0,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
-        { type: 'text', text: agentPrompt }
-      ]
-    }]
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: pdfBase64,
+            },
+          },
+          { type: 'text', text: agentPrompt },
+        ],
+      },
+    ],
   });
 
   // 4. Colectar respuesta streamed
@@ -509,7 +551,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'Anthropic PDF Agent Server',
-    apiKeyConfigured: !!process.env.VITE_ANTHROPIC_API_KEY
+    apiKeyConfigured: !!process.env.VITE_ANTHROPIC_API_KEY,
   });
 });
 ```
@@ -519,6 +561,7 @@ app.get('/health', (req, res) => {
 **Modelo utilizado:** `claude-3-5-sonnet-20241022`
 
 **Capacidades:**
+
 - ✅ Vision: Lee PDFs visualmente
 - ✅ Context window: ~200k tokens input
 - ✅ Structured output: Genera JSON válido
@@ -554,6 +597,7 @@ app.get('/health', (req, res) => {
 ```
 
 **Streaming API:**
+
 ```javascript
 const stream = await anthropic.messages.stream({ ... });
 
@@ -569,6 +613,7 @@ console.log(`Output tokens: ${finalMessage.usage.output_tokens}`);
 ```
 
 **¿Por qué streaming?**
+
 - ✅ Evita timeouts en operaciones >10 minutos
 - ✅ Permite monitoreo en tiempo real
 - ✅ Mejor experiencia de usuario (podría mostrar progreso)
@@ -588,6 +633,7 @@ You MUST process the ENTIRE document from the first page to the last page withou
 Your task is to:
 
 1. **READ THE PDF DOCUMENT COMPLETELY**
+
    - Process EVERY SINGLE PAGE from start to finish
    - Do not stop until you reach the end of the document
    - Extract all text from every page
@@ -595,26 +641,29 @@ Your task is to:
    - Find the account number if present
 
 2. **EXTRACT ALL TRANSACTIONS**
+
    - Find EVERY SINGLE transaction in the ENTIRE document
    - Do not stop after the first page or first 20-30 transactions
    - Continue processing until you have extracted ALL transactions from ALL pages
    - For each transaction extract:
-     * Date (in YYYY-MM-DD format)
-     * Raw description (full text)
-     * Amount (negative for expenses, positive for income)
+     - Date (in YYYY-MM-DD format)
+     - Raw description (full text)
+     - Amount (negative for expenses, positive for income)
 
 3. **CURATE THE DATA**
 
    **CRITICAL: Payee Curation** (Most Important!)
+
    - Extract ONLY the merchant/person name and location
    - Remove prefixes like "Fecha valor:", "Pago Movil En", "Compra", etc.
    - Examples:
-     * "Fecha valor: 17/07/2025 Pago Movil En La Mina, Madrid, Tarj. :*536242"
+     - "Fecha valor: 17/07/2025 Pago Movil En La Mina, Madrid, Tarj. :\*536242"
        → Payee: "La Mina, Madrid"
-     * "Pago Movil En City Paseo Extr, Madrid"
+     - "Pago Movil En City Paseo Extr, Madrid"
        → Payee: "City Paseo Extr, Madrid"
 
    **Notes Field:**
+
    - Keep FULL original description (without "Fecha valor:" prefix)
 
    Note: Category suggestions were removed from the agent prompt as they didn't match user's Actual Budget categories.
@@ -628,6 +677,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
 {"bankName":"Santander España","accountNumber":"ES24...","transactions":[{"date":"2025-07-17","payee":"La Mina, Madrid","notes":"Pago Movil En La Mina, Madrid","amount":-41.80,"confidence":0.95}],"totalTransactionsFound":51,"pagesProcessed":3,"extractionComplete":true,"success":true}
 
 **FORMAT RULES:**
+
 - NO spaces after colons or commas
 - NO line breaks
 - Keep notes CONCISE but informative
@@ -652,11 +702,13 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
 ### Funcionalidades Implementadas
 
 #### 1. **Lectura Multi-Banco**
+
 - ✅ Santander España
 - ✅ Revolut España
 - 🔜 Extensible a otros bancos (BBVA, CaixaBank, etc.)
 
 #### 2. **Procesamiento Multi-Página**
+
 - ✅ 1-10 páginas
 - ✅ 10-100 transacciones por PDF
 - ✅ No se pierde información entre páginas
@@ -665,14 +717,15 @@ IMPORTANT: Return ONLY the compact JSON object. No explanations, no markdown, no
 
 Ejemplos reales:
 
-| Input (Banco) | Output (Curado) |
-|---------------|-----------------|
-| `Fecha valor: 17/07/2025 Pago Movil En La Mina, Madrid, Tarj. :*536242` | `La Mina, Madrid` |
-| `Compra Loomisp*campo Del Moro, Madrid, Tarjeta 123` | `Loomisp, Madrid` |
-| `Pago Movil En City Paseo Extr, Madrid` | `City Paseo Extr, Madrid` |
-| `Transferencia SEPA: Juan Perez Gomez` | `Juan Perez Gomez` |
+| Input (Banco)                                                           | Output (Curado)           |
+| ----------------------------------------------------------------------- | ------------------------- |
+| `Fecha valor: 17/07/2025 Pago Movil En La Mina, Madrid, Tarj. :*536242` | `La Mina, Madrid`         |
+| `Compra Loomisp*campo Del Moro, Madrid, Tarjeta 123`                    | `Loomisp, Madrid`         |
+| `Pago Movil En City Paseo Extr, Madrid`                                 | `City Paseo Extr, Madrid` |
+| `Transferencia SEPA: Juan Perez Gomez`                                  | `Juan Perez Gomez`        |
 
 **Lógica de curación:**
+
 - Elimina prefijos comunes (`Fecha valor:`, `Pago Movil En`, `Compra`, etc.)
 - Extrae nombre de comercio + ubicación
 - Remueve sufijos técnicos (`Tarj. :*xxxx`, `Tarjeta xxx`)
@@ -681,12 +734,14 @@ Ejemplos reales:
 #### 4. **Manejo Robusto de Errores**
 
 **Transacciones individuales:**
+
 - ✅ Si una transacción tiene fecha inválida → se salta, procesa el resto
 - ✅ Si falta payee → se salta, procesa el resto
 - ✅ Si falta amount → se salta, procesa el resto
 - ✅ **CRÍTICO**: Usa `continue` (no `break`) para no detener el loop
 
 **Errores del Agent Server:**
+
 ```typescript
 try {
   const response = await fetch('https://actual-agent-sr.fly.dev/api/process-pdf', ...);
@@ -701,13 +756,13 @@ try {
 
 #### 6. **Performance y Límites**
 
-| Métrica | Valor | Notas |
-|---------|-------|-------|
-| **Tamaño máximo de PDF** | 10 MB | Límite de Multer |
-| **Transacciones por PDF** | 10-100 | Probado hasta 99 |
-| **Tiempo de procesamiento** | 15-45 seg | Depende de páginas |
-| **Input tokens (típico)** | ~3,000 | PDF de 3 páginas |
-| **Output tokens** | ~6,000 | JSON compacto |
+| Métrica                     | Valor       | Notas                       |
+| --------------------------- | ----------- | --------------------------- |
+| **Tamaño máximo de PDF**    | 10 MB       | Límite de Multer            |
+| **Transacciones por PDF**   | 10-100      | Probado hasta 99            |
+| **Tiempo de procesamiento** | 15-45 seg   | Depende de páginas          |
+| **Input tokens (típico)**   | ~3,000      | PDF de 3 páginas            |
+| **Output tokens**           | ~6,000      | JSON compacto               |
 | **Costo por procesamiento** | ~$0.03-0.05 | Basado en pricing de Claude |
 
 #### 7. **Formato de Output**
@@ -721,14 +776,14 @@ try {
       "date": "2025-07-17",
       "payee": "La Mina, Madrid",
       "notes": "Pago Movil En La Mina, Madrid",
-      "amount": -41.80,
+      "amount": -41.8,
       "confidence": 0.95
     },
     {
       "date": "2025-07-18",
       "payee": "Metro Madrid",
       "notes": "Transporte Metro Linea 5",
-      "amount": -2.50,
+      "amount": -2.5,
       "confidence": 0.98
     }
   ],
@@ -753,6 +808,7 @@ try {
 ### Problema 1: Solo se mostraban 15 de 51 transacciones
 
 **Síntoma:**
+
 ```
 PDF tiene 51 transacciones
 Agent extrae 28 transacciones
@@ -762,6 +818,7 @@ UI muestra solo 15 transacciones ❌
 **Root Cause Analysis:**
 
 1. **Investigación Agent Server**:
+
    - Logs mostraban: `✅ 28 transacciones extraídas`
    - Conclusión: Agent tenía 2 problemas
 
@@ -803,11 +860,13 @@ You MUST process the ENTIRE document from the first page to the last page withou
 ### Problema 2: Streaming timeout
 
 **Síntoma:**
+
 ```
 Error: Streaming is required for operations that may take longer than 10 minutes
 ```
 
 **Causa:**
+
 - API no-streaming tiene timeout de 10 minutos
 - PDFs grandes pueden exceder este límite
 
@@ -829,6 +888,7 @@ for await (const chunk of stream) {
 ```
 
 **Beneficios adicionales:**
+
 - ✅ No hay timeout
 - ✅ Mejor monitoreo (tokens in/out en tiempo real)
 - ✅ Posibilidad de UI con progreso en el futuro
@@ -838,23 +898,27 @@ for await (const chunk of stream) {
 ### Problema 3: max_tokens excede límite del modelo
 
 **Síntoma:**
+
 ```
 Error: max_tokens: 16384 > 8192, which is the maximum allowed number of
 output tokens for claude-3-5-sonnet-20241022
 ```
 
 **Causa:**
+
 - Modelo tiene límite de **8192 tokens de output**
 - Configuración inicial pedía 16384 (doble)
 
 **Solución Multi-Parte:**
 
 1. **Reducir max_tokens**:
+
    ```javascript
-   max_tokens: 8192  // Máximo del modelo
+   max_tokens: 8192; // Máximo del modelo
    ```
 
 2. **Optimizar formato JSON** (compacto):
+
    ```
    ANTES: { "date": "2025-07-17", "payee": "La Mina, Madrid" }
    DESPUÉS: {"date":"2025-07-17","payee":"La Mina, Madrid"}
@@ -883,12 +947,14 @@ output tokens for claude-3-5-sonnet-20241022
 ### Problema 4: Deployment timeout (build context 214MB)
 
 **Síntoma:**
+
 ```
 #7 transferring context: 214.20MB 660.9s
 error releasing builder: deadline_exceeded: context deadline exceeded
 ```
 
 **Causa:**
+
 - `.dockerignore` excluía `tsconfig.json`
 - TypeScript path resolution fallaba
 - Build incluía archivos innecesarios (.git, tests, docs)
@@ -912,6 +978,7 @@ anthropic-pdf-agent/      # No necesario en Actual Budget build
 ```
 
 **Resultado:**
+
 ```
 ANTES: 214 MB → 660 segundos → timeout ❌
 DESPUÉS: 36 MB → 48 segundos → success ✅
@@ -925,11 +992,13 @@ Reducción: 83% menos tamaño
 ### Problema 5: Fly.io authentication
 
 **Síntoma:**
+
 ```
 error releasing builder: unauthenticated: Invalid token
 ```
 
 **Solución:**
+
 ```bash
 fly auth whoami
 # ✅ sebastian.ropero96@gmail.com
@@ -1168,12 +1237,14 @@ CMD ["node", "server.js"]
 ### Variables de Entorno
 
 **actual-budget-sr:**
+
 ```bash
 PORT=5006
 ACTUAL_USER_FILES=/data
 ```
 
 **actual-agent-sr:**
+
 ```bash
 PORT=4000
 NODE_ENV=production
@@ -1181,6 +1252,7 @@ VITE_ANTHROPIC_API_KEY=sk-ant-...  # ⚠️ Secret (configurado via Fly.io secre
 ```
 
 **Configurar secrets en Fly.io:**
+
 ```bash
 fly secrets set VITE_ANTHROPIC_API_KEY="sk-ant-..." -a actual-agent-sr
 ```
@@ -1190,28 +1262,33 @@ fly secrets set VITE_ANTHROPIC_API_KEY="sk-ant-..." -a actual-agent-sr
 ### Comandos de Deployment
 
 **Deploy Actual Budget:**
+
 ```bash
 fly deploy -a actual-budget-sr -c fly.actual.toml
 ```
 
 **Deploy Agent Server:**
+
 ```bash
 fly deploy -a actual-agent-sr -c fly.agent.toml
 ```
 
 **Verificar status:**
+
 ```bash
 fly status -a actual-budget-sr
 fly status -a actual-agent-sr
 ```
 
 **Ver logs:**
+
 ```bash
 fly logs -a actual-budget-sr
 fly logs -a actual-agent-sr
 ```
 
 **Restart machines:**
+
 ```bash
 fly machine restart <machine-id> -a actual-budget-sr
 fly machine restart <machine-id> -a actual-agent-sr
@@ -1243,7 +1320,7 @@ Este proyecto demuestra cómo **AI moderno (LLMs con Vision)** puede transformar
 
 **Documento generado:** Octubre 2025
 **Última actualización:** Deployment v1.0 en producción
-**Contacto:** sebastian.ropero96@gmail.com 
+**Contacto:** sebastian.ropero96@gmail.com
 
 ---
 

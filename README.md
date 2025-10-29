@@ -14,6 +14,7 @@
 ### AI-Powered PDF Bank Statement Import
 
 Import transactions directly from Spanish bank PDFs (Santander, Revolut) using Claude AI:
+
 - ✅ Upload PDF → Get 10-100 transactions automatically extracted
 - ✅ Intelligent payee name curation (e.g., "La Mina, Madrid")
 - ✅ Works in browser - no CSV export needed
@@ -21,6 +22,7 @@ Import transactions directly from Spanish bank PDFs (Santander, Revolut) using C
 - ✅ Deployed on Fly.io with split architecture (Actual Budget + AI Agent Server)
 
 **Architecture:** Two-app deployment on Fly.io:
+
 - `actual-budget-sr.fly.dev` - Main Actual Budget app (297 MB)
 - `actual-agent-sr.fly.dev` - Dedicated AI processing server (76 MB)
 

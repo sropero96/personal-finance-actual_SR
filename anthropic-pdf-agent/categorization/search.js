@@ -15,12 +15,13 @@ function extractKeywords(payeeName) {
   return payeeName
     .toLowerCase()
     .replace(/[*,;]/g, ' ') // Remove special chars
-    .split(/\s+/)           // Split by whitespace
-    .filter(word =>
-      word.length >= 3 &&   // Min 3 chars
-      !['del', 'la', 'el', 'los', 'las', 'de', 'con', 'en'].includes(word) // Remove common Spanish words
+    .split(/\s+/) // Split by whitespace
+    .filter(
+      word =>
+        word.length >= 3 && // Min 3 chars
+        !['del', 'la', 'el', 'los', 'las', 'de', 'con', 'en'].includes(word), // Remove common Spanish words
     )
-    .slice(0, 3);           // Top 3 keywords only
+    .slice(0, 3); // Top 3 keywords only
 }
 
 /**
@@ -45,8 +46,8 @@ function levenshteinDistance(str1, str2) {
       } else {
         matrix[i][j] = Math.min(
           matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1,     // insertion
-          matrix[i - 1][j] + 1      // deletion
+          matrix[i][j - 1] + 1, // insertion
+          matrix[i - 1][j] + 1, // deletion
         );
       }
     }
@@ -74,7 +75,7 @@ function deduplicateAndSort(transactions) {
       };
     }
 
-    grouped[key].frequency += (tx.frequency || 1);
+    grouped[key].frequency += tx.frequency || 1;
     grouped[key].examples.push(tx.payeeName);
 
     // Keep most recent date
@@ -130,7 +131,7 @@ function findMatchingRule(transaction, rules) {
         return {
           matched: true,
           categoryId: categoryAction.value,
-          rule: rule,
+          rule,
         };
       }
     }

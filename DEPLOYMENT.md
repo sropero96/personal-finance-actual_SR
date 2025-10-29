@@ -51,6 +51,7 @@ curl https://actual-agent-sr.fly.dev/health
 ```
 
 **Expected response:**
+
 ```json
 {
   "status": "healthy",
@@ -86,11 +87,13 @@ fly status -a actual-budget-sr
 ## 🔐 Environment Variables
 
 ### Actual Budget (actual-budget-sr)
+
 - `ANTHROPIC_AGENT_URL` - Set in fly.actual.toml to agent server URL
 - `ACTUAL_DATA_DIR=/data` - Volume mount path
 - `NODE_ENV=production`
 
 ### Agent Server (actual-agent-sr)
+
 - `VITE_ANTHROPIC_API_KEY` - **Required!** Set via `fly secrets set`
 - `NODE_ENV=production`
 
@@ -115,6 +118,7 @@ fly ssh console -a actual-agent-sr
 ## 🔄 Updates & Redeployment
 
 ### Update Agent Server Only
+
 ```bash
 # Make changes to anthropic-pdf-agent/
 git add . && git commit -m "Update agent server"
@@ -122,6 +126,7 @@ fly deploy -c fly.agent.toml
 ```
 
 ### Update Actual Budget Only
+
 ```bash
 # Make changes to packages/
 git add . && git commit -m "Update Actual Budget"
@@ -129,6 +134,7 @@ fly deploy -c fly.actual.toml
 ```
 
 ### Update Both
+
 ```bash
 git add . && git commit -m "Update both services"
 fly deploy -c fly.agent.toml
@@ -138,6 +144,7 @@ fly deploy -c fly.actual.toml
 ## 🐛 Troubleshooting
 
 ### Agent Server Returns 500
+
 ```bash
 # Check if API key is set
 fly secrets list -a actual-agent-sr
@@ -147,12 +154,14 @@ fly logs -a actual-agent-sr
 ```
 
 ### Actual Budget Can't Connect to Agent
+
 1. Verify agent server is running: `fly status -a actual-agent-sr`
 2. Test agent health: `curl https://actual-agent-sr.fly.dev/health`
 3. Check ANTHROPIC_AGENT_URL in fly.actual.toml
 4. Redeploy Actual Budget: `fly deploy -c fly.actual.toml`
 
 ### Volume Issues
+
 ```bash
 # List volumes
 fly volumes list -a actual-budget-sr
@@ -165,6 +174,7 @@ fly volumes create actualbudget_data -a actual-budget-sr --region iad --size 1
 ## 💰 Cost Estimation
 
 **Free Tier:**
+
 - Both apps run on Fly.io free tier
 - Auto-stop when idle (min_machines_running = 0)
 - 1GB volume included

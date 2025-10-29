@@ -1,4 +1,5 @@
 # Deployment Analysis & Architecture Report
+
 ## Actual Budget + Claude AI PDF Importer - Fly.io Deployment Issues
 
 **Date:** October 14, 2025
@@ -10,6 +11,7 @@
 ## Executive Summary
 
 The production deployment on Fly.io is currently failing due to a series of cascading issues related to:
+
 1. Yarn workspace dependency resolution in Docker
 2. Missing workspace package symlinks in production
 3. Protobuf file generation/copying issues in the @actual-app/crdt package
@@ -22,16 +24,19 @@ The production deployment on Fly.io is currently failing due to a series of casc
 ## Timeline of Issues & Fixes
 
 ### Issue 1: "Failed to fetch" - PDF Import Not Working
+
 **Date:** October 14, 2025 (Initial)
 **Symptom:** Frontend loads but PDF import fails with "Failed to fetch"
 **Root Cause:** Frontend code was hardcoded to connect to `localhost:4000` instead of production Agent Server URL
 
 **Analysis:**
+
 - Code used `process.env.ANTHROPIC_AGENT_URL || 'http://localhost:4000'`
 - `process.env.NODE_ENV` is unreliable in browser context
 - Agent server was also auto-stopping after inactivity
 
 **Fix Applied:**
+
 ```typescript
 // claude-pdf-processor.ts & agent2-service.ts
 const isProduction =
@@ -44,6 +49,7 @@ const agentServerUrl = isProduction
 ```
 
 **Config Fix:**
+
 ```toml
 # fly.agent.toml
 min_machines_running = 1  # Was 0, caused auto-stop
@@ -51,16 +57,19 @@ min_machines_running = 1  # Was 0, caused auto-stop
 
 **Status:** ✅ RESOLVED
 **Commits:**
+
 - `702aaa02` - Environment detection fix
 - `b96aa504` - Agent server configuration fix
 
 ---
 
 ### Issue 2: ERR_MODULE_NOT_FOUND - 'migrate' Package
+
 **Symptom:** Server crashes with `Cannot find package 'migrate'`
 **Root Cause:** Yarn workspace hoisting - dependencies in `/app/node_modules`, not in package-specific directories
 
 **Technical Details:**
+
 ```
 Yarn Workspaces Architecture (Development):
 /app/
@@ -77,6 +86,7 @@ Yarn Workspaces Architecture (Development):
 
 **Docker Problem:**
 Original Dockerfile only copied:
+
 ```dockerfile
 COPY --from=builder /app/packages/sync-server/node_modules ./packages/sync-server/node_modules
 ```
@@ -84,6 +94,7 @@ COPY --from=builder /app/packages/sync-server/node_modules ./packages/sync-serve
 This missed all hoisted dependencies!
 
 **Fix Applied:**
+
 ```dockerfile
 # Copy root node_modules (contains hoisted dependencies)
 COPY --from=builder /app/node_modules ./node_modules
@@ -102,10 +113,12 @@ exec node packages/sync-server/build/app.js
 ---
 
 ### Issue 3: ERR_MODULE_NOT_FOUND - '@actual-app/crdt'
+
 **Symptom:** Server crashes with `Cannot find package '@actual-app/crdt'`
 **Root Cause:** Workspace packages need symlinks in production, just like in development
 
 **Analysis:**
+
 ```bash
 # Development (Yarn creates these automatically):
 /app/node_modules/@actual-app/crdt → /app/packages/crdt
@@ -115,6 +128,7 @@ exec node packages/sync-server/build/app.js
 ```
 
 **Fix Applied:**
+
 ```dockerfile
 # Build CRDT package
 RUN yarn workspace @actual-app/crdt build
@@ -135,10 +149,12 @@ RUN mkdir -p /app/packages/sync-server/node_modules/@actual-app && \
 ---
 
 ### Issue 4: 🔴 CRITICAL - Protobuf Loading Error
+
 **Symptom:** `TypeError: Cannot read properties of undefined (reading 'SyncRequest')`
 **Root Cause:** Complex - protobuf file generation/loading issues
 
 **Error Details:**
+
 ```
 /app/packages/crdt/dist/src/index.js:16
 exports.SyncRequest = globalThis.proto.SyncRequest;
@@ -149,6 +165,7 @@ TypeError: Cannot read properties of undefined (reading 'SyncRequest')
 **Deep Investigation:**
 
 1. **File Structure:**
+
    ```
    /app/packages/crdt/
    ├── src/proto/sync_pb.js    ← 34KB generated protobuf (committed to git)
@@ -156,17 +173,20 @@ TypeError: Cannot read properties of undefined (reading 'SyncRequest')
    ```
 
 2. **Build Process Issue:**
+
    - TypeScript build (`tsc`) compiles `.ts` → `.js`
    - TypeScript does NOT copy existing `.js` files (like sync_pb.js)
    - Original sync_pb.js (34KB) gets replaced with a 162-byte stub
 
 3. **Fix Attempted:**
+
    ```dockerfile
    RUN yarn workspace @actual-app/crdt build && \
        cp packages/crdt/src/proto/sync_pb.js packages/crdt/dist/src/proto/sync_pb.js
    ```
 
 4. **Verification:**
+
    ```bash
    # ✅ File copied correctly - 35KB in production
    $ fly ssh console -C "ls -lh /app/packages/crdt/dist/src/proto/sync_pb.js"
@@ -209,9 +229,11 @@ TypeError: Cannot read properties of undefined (reading 'SyncRequest')
 ## Architecture Problems Identified
 
 ### 1. Monolithic Deployment (Frontend + Backend)
+
 **Problem:** Single Docker image contains both frontend and backend, increasing complexity
 
 **Current Architecture:**
+
 ```
 ┌────────────────────────────────────────────────────┐
 │  Single Fly.io Machine (299 MB)                   │
@@ -230,15 +252,18 @@ TypeError: Cannot read properties of undefined (reading 'SyncRequest')
 ```
 
 **Issues:**
+
 - Cannot scale frontend and backend independently
 - Complex Yarn workspace symlink management in Docker
 - Large image size (299 MB) for what should be simple deployments
 - Difficult to debug - everything mixed together
 
 ### 2. Yarn Workspaces in Docker
+
 **Problem:** Yarn's dependency hoisting doesn't translate cleanly to Docker
 
 **Yarn Workspace Concepts:**
+
 ```javascript
 // Development (Yarn manages this):
 node_modules/@actual-app/crdt → symlink to ../../packages/crdt
@@ -251,6 +276,7 @@ node_modules/@actual-app/crdt → symlink to ../../packages/crdt
 ```
 
 **Manual Steps Required:**
+
 1. Build each workspace package
 2. Copy package.json files
 3. Copy built artifacts (dist directories)
@@ -261,6 +287,7 @@ node_modules/@actual-app/crdt → symlink to ../../packages/crdt
 **This is fragile and error-prone!**
 
 ### 3. CommonJS + ESM Module System Mix
+
 **Problem:** The codebase mixes CommonJS and ES Modules
 
 ```javascript
@@ -275,15 +302,18 @@ import { ... } from '@actual-app/crdt'
 ```
 
 **Issues:**
+
 - Module resolution differences
 - Timing issues with `require()` vs `import`
 - `globalThis` pollution (protobuf relies on this)
 - Hard to debug module loading order
 
 ### 4. Generated Code (Protobuf) Not Handled Properly
+
 **Problem:** sync_pb.js is generated code but treated as source
 
 **Current Flow:**
+
 ```
 1. Developer runs: yarn workspace @actual-app/crdt proto:generate
 2. Generates: packages/crdt/src/proto/sync_pb.js (34KB)
@@ -294,6 +324,7 @@ import { ... } from '@actual-app/crdt'
 ```
 
 **Better Approaches:**
+
 1. **Option A:** Exclude proto files from TypeScript compilation
 2. **Option B:** Generate proto files during Docker build
 3. **Option C:** Bundle crdt package completely (no external dependencies)
@@ -303,9 +334,11 @@ import { ... } from '@actual-app/crdt'
 ## Recommended Solutions
 
 ### Short-Term Fix (Emergency)
+
 **Goal:** Get production working ASAP
 
 **Option 1: Rollback to Last Working Version**
+
 ```bash
 # Find last working deployment
 fly releases -a actual-budget-sr
@@ -316,18 +349,21 @@ fly releases rollback v<number> -a actual-budget-sr
 
 **Option 2: Remove Agent 2 (Category Suggester) Feature**
 This was the feature being added when issues started. Remove it temporarily:
+
 - Revert commits related to Agent 2
 - Keep Agent 1 (PDF importer) which was working
 - Deploy simpler version
 
 **Option 3: Use Pre-built Upstream Image**
 If available, use official Actual Budget Docker image:
+
 ```bash
 # Use upstream actual-server
 docker pull actualbudget/actual-server:latest
 ```
 
 ### Medium-Term Solution (1-2 weeks)
+
 **Goal:** Proper architecture with separated concerns
 
 **Recommended Architecture:**
@@ -357,6 +393,7 @@ docker pull actualbudget/actual-server:latest
 ```
 
 **Benefits:**
+
 - **Frontend:** Deploy to Vercel/Netlify for free, instant global CDN
 - **Sync Server:** Smaller Docker image (~50MB), simpler Dockerfile
 - **Agent Server:** Already separated ✅
@@ -367,6 +404,7 @@ docker pull actualbudget/actual-server:latest
 **Implementation Steps:**
 
 1. **Split Dockerfile.production into two:**
+
    ```dockerfile
    # Dockerfile.frontend (not needed if using Vercel)
    FROM nginx:alpine
@@ -380,6 +418,7 @@ docker pull actualbudget/actual-server:latest
    ```
 
 2. **Simplify sync-server deployment:**
+
    ```bash
    # Use yarn workspaces focus to install only sync-server deps
    yarn workspaces focus @actual-app/sync-server --production
@@ -395,16 +434,19 @@ docker pull actualbudget/actual-server:latest
    ```
 
 ### Long-Term Solution (1-3 months)
+
 **Goal:** Modern, scalable architecture
 
 **Option 1: Containerize Each Workspace**
 Create separate Docker images for each package:
+
 - `@actual-app/web` → Static site
 - `@actual-app/sync-server` → API server
 - `anthropic-pdf-agent` → AI agent (already done ✅)
 
 **Option 2: Migrate to Serverless**
 Use Cloudflare Workers or Vercel Edge Functions:
+
 ```
 Frontend: Static (Vercel/Cloudflare Pages)
 API: Cloudflare Workers (sync-server logic)
@@ -413,6 +455,7 @@ Agents: Cloudflare Workers + AI binding
 ```
 
 **Benefits:**
+
 - Near-zero cold start
 - Auto-scaling
 - Pay per request
@@ -421,6 +464,7 @@ Agents: Cloudflare Workers + AI binding
 
 **Option 3: Monorepo with NX/Turborepo**
 Use modern monorepo tools that handle Docker better:
+
 ```bash
 # NX example
 nx build sync-server --with-deps
@@ -432,12 +476,14 @@ nx docker-build sync-server
 ## Cost Analysis
 
 ### Current (Monolithic)
+
 - **Actual Budget (frontend + sync-server):** $5-10/month (Fly.io)
 - **Agent Server:** $3-5/month (Fly.io)
 - **Total:** ~$8-15/month
 - **Issues:** Complex deployments, high maintenance
 
 ### Recommended (Separated)
+
 - **Frontend (Vercel/Netlify):** $0 (free tier)
 - **Sync Server (Fly.io):** $3-5/month (smaller image)
 - **Agent Server (Fly.io):** $3-5/month (existing)
@@ -449,26 +495,31 @@ nx docker-build sync-server
 ## Technical Debt Identified
 
 1. **No Integration Tests for Deployment**
+
    - Need automated tests that verify production deployments
    - Test Docker build locally before deploying
    - Add smoke tests post-deployment
 
 2. **Manual Dependency Management**
+
    - Yarn workspace symlinks created manually in Dockerfile
    - Should use `yarn workspaces focus` or similar
    - Consider migrating to pnpm (better Docker support)
 
 3. **Mixed Module Systems**
+
    - CommonJS in some packages, ESM in others
    - Pick one and stick to it
    - Or use a bundler to eliminate the issue
 
 4. **No Deployment Rollback Strategy**
+
    - Need automatic rollback on health check failures
    - Implement blue-green deployments
    - Keep last 3 working versions readily available
 
 5. **Insufficient Logging**
+
    - More structured logging needed
    - Add deployment version tracking
    - Implement distributed tracing (OpenTelemetry)
@@ -483,18 +534,21 @@ nx docker-build sync-server
 ## Immediate Action Items
 
 ### Priority 1 (Today) - Get Production Working
+
 - [ ] Decision: Rollback vs. Fix vs. Remove Feature
 - [ ] If rollback: Identify last working version
 - [ ] If fix: Focus on protobuf loading issue
 - [ ] If remove: Revert Agent 2 commits
 
 ### Priority 2 (This Week) - Prevent Future Issues
+
 - [ ] Add Docker build verification in CI/CD
 - [ ] Create staging environment for testing
 - [ ] Document deployment process
 - [ ] Add health check endpoints to all services
 
 ### Priority 3 (Next Week) - Architecture Improvements
+
 - [ ] Evaluate frontend deployment to Vercel/Netlify
 - [ ] Simplify sync-server Dockerfile
 - [ ] Create separate Docker images for each service
@@ -505,21 +559,25 @@ nx docker-build sync-server
 ## Lessons Learned
 
 1. **Yarn Workspaces + Docker is Hard**
+
    - Requires deep understanding of hoisting and module resolution
    - Manual symlink creation is error-prone
    - Consider alternatives (pnpm, separate repos, monorepo tools)
 
 2. **Test Deployments Locally First**
+
    - Use `fly deploy --local-only` for testing
    - Verify Docker image works before production
    - Run smoke tests after deployment
 
 3. **Separate Concerns Early**
+
    - Don't mix frontend and backend in same container
    - Each service should have single responsibility
    - Make services independently deployable
 
 4. **Generated Code Needs Special Handling**
+
    - Don't commit generated files (protobuf) if they change
    - OR commit them but exclude from build processes
    - OR generate during build consistently
@@ -541,11 +599,13 @@ The current deployment has **critical architectural issues** that make it fragil
 4. **Eliminate manual dependency management**
 
 The recommended approach is:
+
 - **Short-term:** Rollback to working version
 - **Medium-term:** Deploy frontend to Vercel, keep backend on Fly.io
 - **Long-term:** Consider serverless architecture for better scalability
 
 **Estimated Effort:**
+
 - Emergency fix: 1-2 hours
 - Architecture refactor: 1-2 weeks
 - Full modernization: 1-3 months
@@ -555,6 +615,7 @@ The recommended approach is:
 ## Appendix: Commands Used During Investigation
 
 ### Fly.io Commands
+
 ```bash
 # Deploy
 fly deploy -a actual-budget-sr
@@ -578,6 +639,7 @@ fly checks list -a actual-budget-sr
 ```
 
 ### Debugging Commands
+
 ```bash
 # Check file in container
 fly ssh console -a actual-budget-sr -C "ls -lh /app/packages/crdt/dist/src/proto/sync_pb.js"
@@ -591,6 +653,7 @@ fly ssh console -a actual-budget-sr -C "ls -la /app/node_modules/google-protobuf
 ```
 
 ### Local Testing Commands
+
 ```bash
 # Build workspace
 yarn workspace @actual-app/crdt build

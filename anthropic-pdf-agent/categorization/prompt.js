@@ -13,12 +13,8 @@
  * @returns {string} The formatted prompt for Claude
  */
 function buildCategorizationPrompt(context) {
-  const {
-    transaction,
-    userCategories,
-    activeRules,
-    similarTransactions,
-  } = context;
+  const { transaction, userCategories, activeRules, similarTransactions } =
+    context;
 
   // Check if a rule matches first (optimization)
   const { findMatchingRule } = require('./search');
@@ -33,7 +29,7 @@ function buildCategorizationPrompt(context) {
         category: category?.name || null,
         confidence: 0.98,
         reasoning: `Matches active rule: ${JSON.stringify(ruleMatch.rule.conditions)}`,
-      }
+      },
     };
   }
 
@@ -57,7 +53,7 @@ ${JSON.stringify(
     isIncome: c.isIncome,
   })),
   null,
-  2
+  2,
 )}
 
 ## TRANSACTION TO CATEGORIZE
@@ -79,7 +75,7 @@ ${
           amount: tx.amount,
         })),
         null,
-        2
+        2,
       )
     : '(No similar transactions found in history)'
 }

@@ -9,13 +9,17 @@
 ## 📋 Resumen Ejecutivo
 
 ### Problema Original
+
 Los usuarios tienen extractos bancarios en PDF que no pueden importar directamente a Actual Budget. Actualmente solo se soportan formatos como OFX, QIF, CSV, etc.
 
 ### Solución Propuesta
+
 Integrar **Claude Code Agents** para automatizar la extracción de transacciones desde PDFs de bancos españoles (Santander y Revolut).
 
 ### ¿Por qué Claude Code Agents en lugar de Mastra?
+
 El experimento anterior con Mastra falló por:
+
 - ❌ Agente corría en proceso separado → problemas de filesystem
 - ❌ Herramientas (tools) no se llamaban de forma confiable
 - ❌ Errores de compatibilidad con modelos (V2 models)
@@ -23,6 +27,7 @@ El experimento anterior con Mastra falló por:
 - ❌ Arquitectura compleja con múltiples puntos de falla
 
 **Claude Code Agents ofrece:**
+
 - ✅ Agente corre en el mismo proceso que el backend
 - ✅ Acceso directo al filesystem (Read, Write, Glob, Grep, etc.)
 - ✅ Tools confiables y bien probadas
@@ -126,6 +131,7 @@ El experimento anterior con Mastra falló por:
 ### 1. Modificaciones en Frontend
 
 #### **Account.tsx** (línea ~590)
+
 ```typescript
 // Agregar 'pdf' a extensiones permitidas
 const res = await window.Actual.openFileDialog({
@@ -139,6 +145,7 @@ const res = await window.Actual.openFileDialog({
 ```
 
 #### **ImportTransactionsModal.tsx** (línea ~515)
+
 ```typescript
 // Agregar 'pdf' a extensiones permitidas
 const res = await window.Actual.openFileDialog({
@@ -152,10 +159,13 @@ const res = await window.Actual.openFileDialog({
 ```
 
 **Loading State para PDFs:**
+
 ```typescript
 // Mostrar mensaje especial para PDFs (procesamiento más lento)
 if (fileType === 'pdf') {
-  setLoadingMessage('Extracting transactions from PDF with AI agent... This may take 30-60 seconds.');
+  setLoadingMessage(
+    'Extracting transactions from PDF with AI agent... This may take 30-60 seconds.',
+  );
 }
 ```
 
@@ -184,7 +194,7 @@ export async function parseFile(filepath, options) {
       return parseOFX(filepath, options);
     case '.xml':
       return parseCAMT(filepath, options);
-    case '.pdf':  // ← NUEVO
+    case '.pdf': // ← NUEVO
       return parsePDF(filepath);
     default:
       errors.push({
@@ -225,9 +235,9 @@ type ClaudeAgentResponse = {
   bankName: string;
   accountNumber?: string;
   transactions: Array<{
-    date: string;        // YYYY-MM-DD
+    date: string; // YYYY-MM-DD
     description: string;
-    amount: number;      // negative for expenses, positive for income
+    amount: number; // negative for expenses, positive for income
     balance?: number;
   }>;
   success: boolean;
@@ -240,7 +250,9 @@ type ClaudeAgentResponse = {
  * Uses the Task tool with general-purpose agent type.
  * The agent will have access to Read, Grep, and other filesystem tools.
  */
-async function invokeClaudeAgent(pdfPath: string): Promise<ClaudeAgentResponse> {
+async function invokeClaudeAgent(
+  pdfPath: string,
+): Promise<ClaudeAgentResponse> {
   logger.info('[PDF Adapter] Invoking Claude Code Agent for:', pdfPath);
 
   const prompt = `
@@ -285,7 +297,7 @@ IMPORTANT:
   // which is only available within Claude Code's execution context
   throw new Error(
     'Claude Code Agent invocation not implemented yet. ' +
-    'This requires integration with Claude Code Task tool API.'
+      'This requires integration with Claude Code Task tool API.',
   );
 }
 
@@ -304,7 +316,10 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
       throw new Error('PDF file is empty or could not be read');
     }
 
-    logger.info('[PDF Adapter] PDF file read successfully, size:', pdfBuffer.length);
+    logger.info(
+      '[PDF Adapter] PDF file read successfully, size:',
+      pdfBuffer.length,
+    );
 
     // Step 2: Save to temp location (if needed for agent)
     // The agent will have access to the original filepath
@@ -314,7 +329,9 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
 
     // Step 4: Validate response
     if (!agentResponse.success) {
-      throw new Error(agentResponse.error || 'Agent failed to extract transactions');
+      throw new Error(
+        agentResponse.error || 'Agent failed to extract transactions',
+      );
     }
 
     if (!Array.isArray(agentResponse.transactions)) {
@@ -325,7 +342,7 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
       '[PDF Adapter] Agent extracted transactions:',
       agentResponse.transactions.length,
       'from bank:',
-      agentResponse.bankName
+      agentResponse.bankName,
     );
 
     // Step 5: Map to Actual Budget transaction format
@@ -341,10 +358,13 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
           : `Imported from ${agentResponse.bankName}`,
       }));
 
-    logger.info('[PDF Adapter] Successfully parsed', transactions.length, 'transactions');
+    logger.info(
+      '[PDF Adapter] Successfully parsed',
+      transactions.length,
+      'transactions',
+    );
 
     return { errors, transactions };
-
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error('[PDF Adapter] Error parsing PDF:', errorMsg);
@@ -375,7 +395,9 @@ Crear una extensión/API que exponga el Task tool para que el backend de Actual 
 // Pseudo-código de la integración
 import { ClaudeCodeTaskAPI } from '@claude-code/api'; // Hipotético
 
-async function invokeClaudeAgent(pdfPath: string): Promise<ClaudeAgentResponse> {
+async function invokeClaudeAgent(
+  pdfPath: string,
+): Promise<ClaudeAgentResponse> {
   const result = await ClaudeCodeTaskAPI.runTask({
     type: 'general-purpose',
     prompt: `Extract transactions from PDF: ${pdfPath} ...`,
@@ -395,12 +417,17 @@ Backend → HTTP Request → Claude Code Bridge → Task Tool → Agent → Resp
 ```
 
 ```typescript
-async function invokeClaudeAgent(pdfPath: string): Promise<ClaudeAgentResponse> {
-  const response = await fetch('http://localhost:9999/claude-agent/extract-pdf', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pdfPath }),
-  });
+async function invokeClaudeAgent(
+  pdfPath: string,
+): Promise<ClaudeAgentResponse> {
+  const response = await fetch(
+    'http://localhost:9999/claude-agent/extract-pdf',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfPath }),
+    },
+  );
 
   return response.json();
 }
@@ -444,12 +471,13 @@ async function parsePDFDirect(filepath: string): Promise<ClaudeAgentResponse> {
 ```json
 {
   "dependencies": {
-    "pdf-parse": "^1.1.1"  // Para extraer texto de PDFs
+    "pdf-parse": "^1.1.1" // Para extraer texto de PDFs
   }
 }
 ```
 
 **Instalación:**
+
 ```bash
 cd packages/loot-core
 yarn add pdf-parse
@@ -496,6 +524,7 @@ describe('PDF Adapter', () => {
 ## 🚀 Plan de Implementación (Fases)
 
 ### **Fase 1: Setup Básico** (1-2 horas)
+
 - [ ] Crear `pdf-adapter.ts` con estructura básica
 - [ ] Agregar case `.pdf` en `parse-file.ts`
 - [ ] Agregar `'pdf'` a extensiones en UI (Account.tsx, ImportTransactionsModal.tsx)
@@ -503,6 +532,7 @@ describe('PDF Adapter', () => {
 - [ ] Commit: "feat: Add basic PDF import structure"
 
 ### **Fase 2: Implementación Direct Parsing (Opción C)** (2-3 horas)
+
 - [ ] Implementar `parseSantanderTransactions(text)` con regex
 - [ ] Implementar `parseRevolutTransactions(text)` con regex
 - [ ] Agregar logging comprehensivo
@@ -510,6 +540,7 @@ describe('PDF Adapter', () => {
 - [ ] Commit: "feat: Implement direct PDF parsing for Santander and Revolut"
 
 ### **Fase 3: Refinamiento** (1-2 horas)
+
 - [ ] Mejorar regex patterns basado en PDFs reales
 - [ ] Agregar manejo de errores robusto
 - [ ] Agregar validación de fechas y montos
@@ -517,6 +548,7 @@ describe('PDF Adapter', () => {
 - [ ] Commit: "fix: Improve PDF parsing accuracy and error handling"
 
 ### **Fase 4: Testing y Pulido** (1 hora)
+
 - [ ] Crear unit tests
 - [ ] Testing con múltiples PDFs de cada banco
 - [ ] Verificar edge cases (PDFs vacíos, fechas inválidas, etc.)
@@ -524,7 +556,9 @@ describe('PDF Adapter', () => {
 - [ ] Commit: "test: Add unit tests for PDF adapter"
 
 ### **Fase 5 (Opcional): Migración a Claude Agent** (2-3 horas)
+
 Si se decide usar Claude Code Agent en lugar de parsing directo:
+
 - [ ] Implementar HTTP Bridge (Opción B)
 - [ ] O investigar Claude Code Extension API (Opción A)
 - [ ] Migrar lógica de parsing a prompts del agente
@@ -536,40 +570,40 @@ Si se decide usar Claude Code Agent en lugar de parsing directo:
 
 ### ✅ Ventajas de Direct Parsing (Opción C)
 
-| Ventaja | Descripción |
-|---------|-------------|
-| **Simplicidad** | No requiere agentes externos, HTTP bridges, ni procesos adicionales |
-| **Velocidad** | Parsing instantáneo (~1-2 segundos) |
-| **Confiabilidad** | Sin dependencias de APIs externas o modelos LLM |
-| **Debugging** | Fácil de debuggear con logs y breakpoints |
-| **Costo** | Gratis (no usa tokens de Claude API) |
-| **Offline** | Funciona sin conexión a internet |
+| Ventaja           | Descripción                                                         |
+| ----------------- | ------------------------------------------------------------------- |
+| **Simplicidad**   | No requiere agentes externos, HTTP bridges, ni procesos adicionales |
+| **Velocidad**     | Parsing instantáneo (~1-2 segundos)                                 |
+| **Confiabilidad** | Sin dependencias de APIs externas o modelos LLM                     |
+| **Debugging**     | Fácil de debuggear con logs y breakpoints                           |
+| **Costo**         | Gratis (no usa tokens de Claude API)                                |
+| **Offline**       | Funciona sin conexión a internet                                    |
 
 ### ⚠️ Desventajas de Direct Parsing
 
-| Desventaja | Descripción |
-|------------|-------------|
+| Desventaja        | Descripción                                                        |
+| ----------------- | ------------------------------------------------------------------ |
 | **Mantenimiento** | Regex patterns requieren actualizaciones si bancos cambian formato |
 | **Escalabilidad** | Agregar nuevos bancos requiere escribir nuevos parsers manualmente |
-| **Robustez** | Puede fallar con formatos inesperados o variaciones en PDFs |
+| **Robustez**      | Puede fallar con formatos inesperados o variaciones en PDFs        |
 
 ### ✅ Ventajas de Claude Agent (Opciones A/B)
 
-| Ventaja | Descripción |
-|---------|-------------|
-| **Flexibilidad** | El agente se adapta a cambios en formatos automáticamente |
-| **Escalabilidad** | Agregar nuevos bancos solo requiere actualizar el prompt |
-| **Robustez** | Maneja variaciones y edge cases mejor que regex |
-| **Inteligencia** | Puede inferir contexto (ej: "pago en cuotas") |
+| Ventaja           | Descripción                                               |
+| ----------------- | --------------------------------------------------------- |
+| **Flexibilidad**  | El agente se adapta a cambios en formatos automáticamente |
+| **Escalabilidad** | Agregar nuevos bancos solo requiere actualizar el prompt  |
+| **Robustez**      | Maneja variaciones y edge cases mejor que regex           |
+| **Inteligencia**  | Puede inferir contexto (ej: "pago en cuotas")             |
 
 ### ⚠️ Desventajas de Claude Agent
 
-| Desventaja | Descripción |
-|------------|-------------|
-| **Complejidad** | Requiere infraestructura adicional (HTTP bridge o API) |
-| **Velocidad** | Más lento (~30-60 segundos por PDF) |
-| **Costo** | Usa tokens de Claude API (puede ser costoso con muchos PDFs) |
-| **Dependencia** | Requiere conexión a internet y disponibilidad de API |
+| Desventaja      | Descripción                                                  |
+| --------------- | ------------------------------------------------------------ |
+| **Complejidad** | Requiere infraestructura adicional (HTTP bridge o API)       |
+| **Velocidad**   | Más lento (~30-60 segundos por PDF)                          |
+| **Costo**       | Usa tokens de Claude API (puede ser costoso con muchos PDFs) |
+| **Dependencia** | Requiere conexión a internet y disponibilidad de API         |
 
 ---
 
@@ -578,6 +612,7 @@ Si se decide usar Claude Code Agent en lugar de parsing directo:
 ### **Approach Recomendado: Hybrid**
 
 1. **Empezar con Direct Parsing (Opción C)**
+
    - Implementación rápida y simple
    - Suficiente para el 80% de los casos
    - Sin dependencias externas complejas
@@ -588,12 +623,14 @@ Si se decide usar Claude Code Agent en lugar de parsing directo:
    - Solo para casos complejos o formatos nuevos
 
 **Flujo Híbrido:**
+
 ```
 PDF → Direct Parser → ¿Éxito? → Sí → Return transactions
                     → No → Invoke Claude Agent → Return transactions
 ```
 
 Esto combina lo mejor de ambos mundos:
+
 - ✅ Rápido y confiable para casos comunes
 - ✅ Robusto con fallback inteligente
 - ✅ Escalable a largo plazo

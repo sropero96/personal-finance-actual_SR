@@ -107,7 +107,9 @@ type AccountHeaderProps = {
   onReconcile: ComponentProps<typeof ReconcileMenu>['onReconcile'];
   onBatchEdit: ComponentProps<typeof SelectedTransactionsButton>['onEdit'];
   onRunRules: ComponentProps<typeof SelectedTransactionsButton>['onRunRules'];
-  onAICategorize: ComponentProps<typeof SelectedTransactionsButton>['onAICategorize'];
+  onAICategorize: ComponentProps<
+    typeof SelectedTransactionsButton
+  >['onAICategorize'];
   onBatchDelete: ComponentProps<typeof SelectedTransactionsButton>['onDelete'];
   onBatchDuplicate: ComponentProps<
     typeof SelectedTransactionsButton

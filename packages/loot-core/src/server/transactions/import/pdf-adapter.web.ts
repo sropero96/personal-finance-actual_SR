@@ -20,11 +20,15 @@
  */
 
 import { logger } from '../../../platform/server/log';
+
+import { processPDFWithClaude } from './claude-pdf-processor';
 import type { ParseFileResult } from './parse-file';
 
 // Import new direct PDF processor
-import { processPDFWithClaude } from './claude-pdf-processor';
-import { mapClaudeToActual, validateTransactionCompleteness } from './transaction-mapper';
+import {
+  mapClaudeToActual,
+  validateTransactionCompleteness,
+} from './transaction-mapper';
 
 /**
  * Parse PDF file using Claude AI Direct PDF Processing
@@ -35,23 +39,37 @@ import { mapClaudeToActual, validateTransactionCompleteness } from './transactio
  * @returns ParseFileResult with curated transactions
  */
 export async function parsePDF(filepath: string): Promise<ParseFileResult> {
-  logger.info('[PDF Adapter] Starting Claude AI Direct PDF Processing:', filepath);
-  logger.info('[PDF Adapter] Architecture: PDF → Claude API (native PDF reading) → Structured Data');
+  logger.info(
+    '[PDF Adapter] Starting Claude AI Direct PDF Processing:',
+    filepath,
+  );
+  logger.info(
+    '[PDF Adapter] Architecture: PDF → Claude API (native PDF reading) → Structured Data',
+  );
 
   try {
     // STEP 1: Process PDF directly with Claude
     // Claude API has native PDF support - no need for pdfjs!
-    logger.info('[PDF Adapter] Step 1: Sending PDF to Claude API for direct processing...');
+    logger.info(
+      '[PDF Adapter] Step 1: Sending PDF to Claude API for direct processing...',
+    );
 
     const claudeResponse = await processPDFWithClaude(filepath);
 
     if (!claudeResponse.success) {
-      logger.error('[PDF Adapter] Claude processing failed:', claudeResponse.error);
+      logger.error(
+        '[PDF Adapter] Claude processing failed:',
+        claudeResponse.error,
+      );
       return {
-        errors: [{
-          message: 'AI processing failed: ' + (claudeResponse.error || 'Unknown error'),
-          internal: claudeResponse.error,
-        }],
+        errors: [
+          {
+            message:
+              'AI processing failed: ' +
+              (claudeResponse.error || 'Unknown error'),
+            internal: claudeResponse.error,
+          },
+        ],
         transactions: [],
       };
     }
@@ -90,36 +108,46 @@ export async function parsePDF(filepath: string): Promise<ParseFileResult> {
 
     // Log sample transactions for debugging
     if (result.transactions.length > 0) {
-      logger.info('[PDF Adapter] Sample transactions:', result.transactions.slice(0, 3).map(tx => ({
-        date: tx.date,
-        payee: tx.payee_name,
-        amount: tx.amount,
-        category: tx.category,
-      })));
+      logger.info(
+        '[PDF Adapter] Sample transactions:',
+        result.transactions.slice(0, 3).map(tx => ({
+          date: tx.date,
+          payee: tx.payee_name,
+          amount: tx.amount,
+          // Note: category field removed - handled by Agent 2 (Autocategorization)
+        })),
+      );
     }
 
     return result;
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('[PDF Adapter] Fatal error during PDF parsing:', errorMessage);
 
     // Check if it's an API key error
-    if (errorMessage.includes('API key') || errorMessage.includes('ANTHROPIC_API_KEY')) {
+    if (
+      errorMessage.includes('API key') ||
+      errorMessage.includes('ANTHROPIC_API_KEY')
+    ) {
       return {
-        errors: [{
-          message: 'Claude API key not configured. Please add VITE_ANTHROPIC_API_KEY to your .env file.',
-          internal: errorMessage,
-        }],
+        errors: [
+          {
+            message:
+              'Claude API key not configured. Please add VITE_ANTHROPIC_API_KEY to your .env file.',
+            internal: errorMessage,
+          },
+        ],
         transactions: [],
       };
     }
 
     return {
-      errors: [{
-        message: 'Failed to parse PDF file',
-        internal: errorMessage,
-      }],
+      errors: [
+        {
+          message: 'Failed to parse PDF file',
+          internal: errorMessage,
+        },
+      ],
       transactions: [],
     };
   }

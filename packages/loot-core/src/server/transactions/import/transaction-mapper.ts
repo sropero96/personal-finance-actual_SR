@@ -7,8 +7,12 @@
  */
 
 import { logger } from '../../../platform/server/log';
+
+import type {
+  ClaudePDFResponse,
+  ClaudeTransaction,
+} from './claude-pdf-processor';
 import type { ParseFileResult } from './parse-file';
-import type { ClaudePDFResponse, ClaudeTransaction } from './claude-pdf-processor';
 
 /**
  * Map Claude Agent response to Actual Budget transaction format
@@ -16,12 +20,15 @@ import type { ClaudePDFResponse, ClaudeTransaction } from './claude-pdf-processo
  * @param claudeResponse - Response from Claude Agent
  * @returns ParseFileResult compatible with Actual Budget
  */
-export function mapClaudeToActual(claudeResponse: ClaudePDFResponse): ParseFileResult {
+export function mapClaudeToActual(
+  claudeResponse: ClaudePDFResponse,
+): ParseFileResult {
   const errors: { message: string; internal: string }[] = [];
 
   // Check if Claude processing failed
   if (!claudeResponse.success) {
-    const errorMsg = claudeResponse.error || 'Claude Agent failed to process PDF';
+    const errorMsg =
+      claudeResponse.error || 'Claude Agent failed to process PDF';
     logger.error('[Transaction Mapper] Claude processing failed:', errorMsg);
 
     errors.push({
@@ -36,14 +43,20 @@ export function mapClaudeToActual(claudeResponse: ClaudePDFResponse): ParseFileR
   if (!claudeResponse.extractionComplete) {
     logger.warn('[Transaction Mapper] Extraction may be incomplete');
     errors.push({
-      message: 'PDF extraction may be incomplete. Please verify all transactions are present.',
+      message:
+        'PDF extraction may be incomplete. Please verify all transactions are present.',
       internal: `Found ${claudeResponse.transactions.length} transactions, but extraction marked as incomplete`,
     });
   }
 
   // Map transactions
   const transactions = claudeResponse.transactions.map((tx, index) => {
-    return mapSingleTransaction(tx, claudeResponse.bankName, claudeResponse.accountNumber, index);
+    return mapSingleTransaction(
+      tx,
+      claudeResponse.bankName,
+      claudeResponse.accountNumber,
+      index,
+    );
   });
 
   // Filter out invalid transactions
@@ -77,7 +90,7 @@ function mapSingleTransaction(
   tx: ClaudeTransaction,
   bankName: string,
   accountNumber?: string,
-  index?: number
+  index?: number,
 ): any | null {
   try {
     // Validate required fields
@@ -92,7 +105,10 @@ function mapSingleTransaction(
     }
 
     if (tx.amount === undefined || tx.amount === null || isNaN(tx.amount)) {
-      logger.warn('[Transaction Mapper] Transaction missing or invalid amount:', tx);
+      logger.warn(
+        '[Transaction Mapper] Transaction missing or invalid amount:',
+        tx,
+      );
       return null;
     }
 
@@ -104,23 +120,23 @@ function mapSingleTransaction(
     const notes = tx.notes ? notesPrefix + tx.notes : notesPrefix + tx.payee;
 
     // Build confidence indicator (for debugging)
-    const confidenceNote = tx.confidence && tx.confidence < 0.8
-      ? ` (confidence: ${Math.round(tx.confidence * 100)}%)`
-      : '';
+    const confidenceNote =
+      tx.confidence && tx.confidence < 0.8
+        ? ` (confidence: ${Math.round(tx.confidence * 100)}%)`
+        : '';
 
     return {
       date: tx.date,
       payee_name: tx.payee,
       imported_payee: tx.payee,
       notes: notes + confidenceNote,
-      // Category is suggested but not set (user will confirm)
-      // We can add it as a note or custom field if needed
-      category: tx.category || 'General',
+      // Note: Category field removed - not part of Transaction type
+      // Category suggestions are handled separately via Agent 2 (Autocategorization)
+      // User will assign categories during the import review process
       amount: tx.amount,
       // Store Claude's confidence for potential future use
       __claude_confidence: tx.confidence,
     };
-
   } catch (error) {
     logger.error('[Transaction Mapper] Error mapping transaction:', error, tx);
     return null;
@@ -136,7 +152,7 @@ function mapSingleTransaction(
  */
 export function validateTransactionCompleteness(
   claudeResponse: ClaudePDFResponse,
-  expectedCount?: number
+  expectedCount?: number,
 ): {
   isComplete: boolean;
   message: string;
@@ -165,7 +181,7 @@ export function validateTransactionCompleteness(
 
   // Check for low-confidence transactions
   const lowConfidenceCount = claudeResponse.transactions.filter(
-    tx => tx.confidence && tx.confidence < 0.7
+    tx => tx.confidence && tx.confidence < 0.7,
   ).length;
 
   if (lowConfidenceCount > 0) {
@@ -184,9 +200,7 @@ export function validateTransactionCompleteness(
 /**
  * Generate user-friendly error messages
  */
-export function formatErrorMessage(
-  claudeResponse: ClaudePDFResponse
-): string {
+export function formatErrorMessage(claudeResponse: ClaudePDFResponse): string {
   if (!claudeResponse.success) {
     return claudeResponse.error || 'Failed to process PDF';
   }

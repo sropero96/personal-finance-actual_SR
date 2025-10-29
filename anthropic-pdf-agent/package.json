@@ -7,7 +7,12 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": ["anthropic", "agent", "pdf", "banking"],
+  "keywords": [
+    "anthropic",
+    "agent",
+    "pdf",
+    "banking"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {

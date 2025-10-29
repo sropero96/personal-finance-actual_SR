@@ -48,11 +48,11 @@ import {
   ModalHeader,
 } from '@desktop-client/components/common/Modal';
 import { SectionLabel } from '@desktop-client/components/forms';
+import { AICategorizeModal } from '@desktop-client/components/modals/AICategorizeModal';
 import {
   TableHeader,
   TableWithNavigator,
 } from '@desktop-client/components/table';
-import { AICategorizeModal } from '@desktop-client/components/modals/AICategorizeModal';
 import { fetchAgent2Context } from '@desktop-client/hooks/useAgent2Context';
 import { useCategories } from '@desktop-client/hooks/useCategories';
 import { useDateFormat } from '@desktop-client/hooks/useDateFormat';
@@ -198,7 +198,9 @@ export function ImportTransactionsModal({
 
   // Agent 2 (Category Suggester) state
   const [showAICategorizeModal, setShowAICategorizeModal] = useState(false);
-  const [agent2Suggestions, setAgent2Suggestions] = useState<Agent2Suggestion[]>([]);
+  const [agent2Suggestions, setAgent2Suggestions] = useState<
+    Agent2Suggestion[]
+  >([]);
   const [isLoadingAgent2, setIsLoadingAgent2] = useState(false);
 
   // This cannot be set after parsing the file, because changing it
@@ -257,9 +259,10 @@ export function ImportTransactionsModal({
           ? applyFieldMappings(trans, fieldMappings)
           : trans;
 
-        const date = isOfxFile(filetype) || isCamtFile(filetype) || isPdfFile(filetype)
-          ? trans.date
-          : parseDate(trans.date, parseDateFormat);
+        const date =
+          isOfxFile(filetype) || isCamtFile(filetype) || isPdfFile(filetype)
+            ? trans.date
+            : parseDate(trans.date, parseDateFormat);
         if (date == null) {
           console.log(
             `Unable to parse date ${
@@ -322,7 +325,7 @@ export function ImportTransactionsModal({
         return map;
       }, {});
 
-      return transactions
+      const result = transactions
         .filter(trans => !trans.isMatchedTransaction)
         .reduce((previous, current_trx) => {
           let next = previous;
@@ -358,6 +361,10 @@ export function ImportTransactionsModal({
 
           return next;
         }, []);
+
+      console.log('[getImportPreview] Returning preview transactions:', result.length);
+      console.log('[getImportPreview] Sample transaction:', result[0]);
+      return result;
     },
     [accountId, categories.list, clearOnImport, dispatch],
   );
@@ -446,6 +453,7 @@ export function ImportTransactionsModal({
         // Reverse the transactions because it's very common for them to
         // be ordered ascending, but we show transactions descending by
         // date. This is purely cosmetic.
+        console.log('[parse] About to call getImportPreview with transactions:', transactions.length);
         const transactionPreview = await getImportPreview(
           transactions.reverse(),
           filetype,
@@ -457,7 +465,10 @@ export function ImportTransactionsModal({
           outValue,
           multiplierAmount,
         );
+        console.log('[parse] getImportPreview returned:', transactionPreview.length, 'transactions');
+        console.log('[parse] Calling setTransactions...');
         setTransactions(transactionPreview);
+        console.log('[parse] setTransactions called successfully');
       }
     },
     // We use some state variables from the component, but do not want to re-parse when they change
@@ -606,7 +617,9 @@ export function ImportTransactionsModal({
             notification: {
               id: 'agent2-health-check-failed',
               type: 'error',
-              message: t('Agent Server is not available. Please try again later.'),
+              message: t(
+                'Agent Server is not available. Please try again later.',
+              ),
             },
           }),
         );
@@ -642,7 +655,10 @@ export function ImportTransactionsModal({
         uncategorizedTransactions.map(t => ({
           id: String(t.trns_id || t.id || `temp-${Math.random()}`),
           payee: String(t.payee || ''),
-          amount: typeof t.amount === 'number' ? t.amount : amountToInteger(t.amount || 0),
+          amount:
+            typeof t.amount === 'number'
+              ? t.amount
+              : amountToInteger(t.amount || 0),
           date: String(t.date || ''),
           notes: String(t.notes || ''),
           account: accountId, // Add required field for TransactionEntity
@@ -663,7 +679,10 @@ export function ImportTransactionsModal({
           id: String(t.trns_id || t.id || `temp-${Math.random()}`),
           payee_name: String(t.payee || ''),
           payee: String(t.payee || ''),
-          amount: typeof t.amount === 'number' ? t.amount : amountToInteger(t.amount || 0),
+          amount:
+            typeof t.amount === 'number'
+              ? t.amount
+              : amountToInteger(t.amount || 0),
           date: String(t.date || ''),
           notes: String(t.notes || ''),
         })),
@@ -703,7 +722,10 @@ export function ImportTransactionsModal({
   async function onApplyAgent2Suggestions(
     appliedCategories: Map<string, string>,
   ) {
-    console.log('[ImportTransactionsModal] Applying Agent 2 suggestions:', appliedCategories.size);
+    console.log(
+      '[ImportTransactionsModal] Applying Agent 2 suggestions:',
+      appliedCategories.size,
+    );
 
     // Update transactions with selected categories
     const updatedTransactions = transactions.map(trans => {
@@ -933,6 +955,18 @@ export function ImportTransactionsModal({
     });
   }
 
+  console.log('[render] transactions state:', transactions.length);
+  console.log('[render] error state:', error);
+  console.log('[render] loadingState:', loadingState);
+  console.log('[render] filetype:', filetype);
+
+  const filteredTransactions = transactions.filter(
+    trans =>
+      !trans.isMatchedTransaction ||
+      (trans.isMatchedTransaction && reconcile),
+  );
+  console.log('[render] Filtered transactions for table:', filteredTransactions.length);
+
   return (
     <Modal
       name="import-transactions"
@@ -970,15 +1004,12 @@ export function ImportTransactionsModal({
 
               {/* @ts-expect-error - ImportTransaction is not a TableItem */}
               <TableWithNavigator<ImportTransaction>
-                items={transactions.filter(
-                  trans =>
-                    !trans.isMatchedTransaction ||
-                    (trans.isMatchedTransaction && reconcile),
-                )}
+                items={filteredTransactions}
                 fields={['payee', 'category', 'amount']}
                 style={{ backgroundColor: theme.tableHeaderBackground }}
                 getItemKey={index => String(index)}
                 renderEmpty={() => {
+                  console.log('[renderEmpty] Table is empty, no transactions to display');
                   return (
                     <View
                       style={{
@@ -992,25 +1023,28 @@ export function ImportTransactionsModal({
                     </View>
                   );
                 }}
-                renderItem={({ item }) => (
-                  <View>
-                    <Transaction
-                      transaction={item}
-                      showParsed={filetype === 'csv' || filetype === 'qif'}
-                      parseDateFormat={parseDateFormat}
-                      dateFormat={dateFormat}
-                      fieldMappings={fieldMappings}
-                      splitMode={splitMode}
-                      inOutMode={inOutMode}
-                      outValue={outValue}
-                      flipAmount={flipAmount}
-                      multiplierAmount={multiplierAmount}
-                      categories={categories.list}
-                      onCheckTransaction={onCheckTransaction}
-                      reconcile={reconcile}
-                    />
-                  </View>
-                )}
+                renderItem={({ item }) => {
+                  console.log('[renderItem] Rendering transaction:', item.payee_name);
+                  return (
+                    <View>
+                      <Transaction
+                        transaction={item}
+                        showParsed={filetype === 'csv' || filetype === 'qif'}
+                        parseDateFormat={parseDateFormat}
+                        dateFormat={dateFormat}
+                        fieldMappings={fieldMappings}
+                        splitMode={splitMode}
+                        inOutMode={inOutMode}
+                        outValue={outValue}
+                        flipAmount={flipAmount}
+                        multiplierAmount={multiplierAmount}
+                        categories={categories.list}
+                        onCheckTransaction={onCheckTransaction}
+                        reconcile={reconcile}
+                      />
+                    </View>
+                  );
+                }}
               />
             </View>
           )}
@@ -1349,17 +1383,24 @@ export function ImportTransactionsModal({
       {/* Agent 2: Category Suggestions Modal */}
       {showAICategorizeModal && (
         <AICategorizeModal
-          transactions={transactions.filter(
-            t =>
-              t.selected &&
-              !t.isMatchedTransaction &&
-              (!t.category || t.category === 'uncategorized'),
-          ).map(t => ({
-            id: String(t.trns_id || t.id || ''),
-            payee: String(t.payee || ''),
-            amount: typeof t.amount === 'number' ? t.amount : amountToInteger(t.amount || 0),
-            account: accountId,
-          })) as any} // Cast to TransactionEntity[]
+          transactions={
+            transactions
+              .filter(
+                t =>
+                  t.selected &&
+                  !t.isMatchedTransaction &&
+                  (!t.category || t.category === 'uncategorized'),
+              )
+              .map(t => ({
+                id: String(t.trns_id || t.id || ''),
+                payee: String(t.payee || ''),
+                amount:
+                  typeof t.amount === 'number'
+                    ? t.amount
+                    : amountToInteger(t.amount || 0),
+                account: accountId,
+              })) as any
+          } // Cast to TransactionEntity[]
           suggestions={agent2Suggestions}
           onApply={onApplyAgent2Suggestions}
           onClose={() => setShowAICategorizeModal(false)}
