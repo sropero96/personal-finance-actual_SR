@@ -970,13 +970,21 @@ export function ImportTransactionsModal({
   console.log('[render] Filtered transactions for table:', filteredTransactions.length);
   console.log('[render] Conditional check (!error || !error.parsed):', (!error || !error?.parsed));
 
+  console.log('[render] === FINAL STATE BEFORE RETURN ===');
+  console.log('[render] FINAL loadingState:', loadingState);
+  console.log('[render] FINAL loadingState type:', typeof loadingState);
+  console.log('[render] Modal isLoading prop will be:', loadingState === 'parsing');
+
   return (
     <Modal
       name="import-transactions"
-      isLoading={loadingState === 'parsing'}
+      isLoading={false}
       containerProps={{ style: { width: 800 } }}
     >
-      {({ state: { close } }) => (
+      {({ state: { close } }) => {
+        console.log('[Modal children] Function called! close type:', typeof close);
+        console.log('[Modal children] Will render content now...');
+        return (
         <>
           <ModalHeader
             title={
@@ -1386,7 +1394,8 @@ export function ImportTransactionsModal({
             </View>
           </View>
         </>
-      )}
+        );
+      }}
 
       {/* Agent 2: Category Suggestions Modal */}
       {showAICategorizeModal && (
