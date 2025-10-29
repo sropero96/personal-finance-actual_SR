@@ -59,6 +59,45 @@ Usuario debe:
 ### Estado
 🔍 **WAITING FOR USER LOGS** - Need to confirm if AutoSizer is the issue
 
+### Update 2: Conditional Block Logging (✅ Deployed)
+
+**Análisis de logs del usuario**:
+El usuario compartió logs que mostraban:
+- ✅ `transactions state: 93` (correcto)
+- ✅ `Filtered transactions for table: 93` (correcto)
+- ❌ Logs de `[render] About to render TableWithNavigator` NUNCA aparecen
+- ❌ Logs de `[Table]` y `[Table AutoSizer]` NUNCA aparecen
+
+**Nueva hipótesis**:
+El condicional `{(!error || !error.parsed) &&` está bloqueando el render. Aunque `error` parece ser `null`, algo está impidiendo que el bloque se ejecute.
+
+**Logging adicional agregado**:
+1. `error.parsed` value
+2. Resultado del condicional `(!error || !error.parsed)`
+3. Log ANTES del bloque condicional
+4. Log DENTRO del bloque condicional (primera línea)
+
+**Logs esperados**:
+```
+[render] error.parsed: undefined
+[render] Conditional check (!error || !error.parsed): true
+[render] BEFORE conditional block, will check: true
+[render] INSIDE conditional block - will render table
+[render] About to render TableWithNavigator with items: 93
+[Table] isEmpty: false
+[Table AutoSizer] width: XXX, height: YYY
+```
+
+**Deploy**:
+```bash
+NODE_OPTIONS="--max-old-space-size=6144" yarn workspace @actual-app/web build:browser
+fly deploy --config fly.actual.toml
+fly machine start 286ed00a6d65d8 -a actual-budget-sr
+```
+
+**Status**: ✅ Deployed (version 46)
+**Commit**: `d3c5c79d` - "debug(import): Add detailed conditional check logging to diagnose render blocking"
+
 ---
 
 ## 2025-10-29: Fix Claude Model + Web Worker Environment Detection
