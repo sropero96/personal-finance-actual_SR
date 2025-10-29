@@ -958,6 +958,7 @@ export function ImportTransactionsModal({
 
   console.log('[render] transactions state:', transactions.length);
   console.log('[render] error state:', error);
+  console.log('[render] error.parsed:', error?.parsed);
   console.log('[render] loadingState:', loadingState);
   console.log('[render] filetype:', filetype);
 
@@ -967,6 +968,7 @@ export function ImportTransactionsModal({
       (trans.isMatchedTransaction && reconcile),
   );
   console.log('[render] Filtered transactions for table:', filteredTransactions.length);
+  console.log('[render] Conditional check (!error || !error.parsed):', (!error || !error?.parsed));
 
   return (
     <Modal
@@ -993,16 +995,19 @@ export function ImportTransactionsModal({
               </Text>
             </View>
           )}
+          {console.log('[render] BEFORE conditional block, will check:', (!error || !error?.parsed))}
           {(!error || !error.parsed) && (
-            <View
-              style={{
-                flex: 'unset',
-                height: 300,
-                border: '1px solid ' + theme.tableBorder,
-              }}
-            >
-              <TableHeader headers={headers} />
-              {console.log('[render] About to render TableWithNavigator with items:', filteredTransactions.length)}
+            <>
+              {console.log('[render] INSIDE conditional block - will render table')}
+              <View
+                style={{
+                  flex: 'unset',
+                  height: 300,
+                  border: '1px solid ' + theme.tableBorder,
+                }}
+              >
+                <TableHeader headers={headers} />
+                {console.log('[render] About to render TableWithNavigator with items:', filteredTransactions.length)}
 
               {/* @ts-expect-error - ImportTransaction is not a TableItem */}
               <TableWithNavigator<ImportTransaction>
@@ -1049,6 +1054,7 @@ export function ImportTransactionsModal({
                 }}
               />
             </View>
+            </>
           )}
           {error && error.parsed && (
             <View
