@@ -1002,6 +1002,7 @@ export function ImportTransactionsModal({
               }}
             >
               <TableHeader headers={headers} />
+              {console.log('[render] About to render TableWithNavigator with items:', filteredTransactions.length)}
 
               {/* @ts-expect-error - ImportTransaction is not a TableItem */}
               <TableWithNavigator<ImportTransaction>

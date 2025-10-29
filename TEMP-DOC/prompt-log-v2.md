@@ -1,4 +1,7 @@
-1. Contexto del proyecto
+### 28 - OCT
+
+
+1) Contexto del proyecto
 
 Proyecto base: aplicación de finanzas personales open source, derivada de Actual Budget.
 
@@ -10,7 +13,7 @@ Agente de Autocategorización: toma transacciones ya estructuradas, y según des
 
 Estado actual: el agente PDF funcionaba correctamente. Luego de implementar el agente de Autocategorización, el agente PDF dejó de funcionar. El agente de Autocategorización aún no fue probado de punta a punta.
 
-2. Tu meta como agente principal
+2) Tu meta como agente principal
 
 Recuperar todo el contexto funcional y técnico del repositorio.
 
@@ -24,7 +27,7 @@ Subagente B: Riesgos y Errores. Hace lint extendido, búsqueda de anti-patterns,
 
 Entregar un plan de corrección y mejora priorizado, con tareas atómicas y criterios de aceptación.
 
-3. Suposiciones y convenciones
+3) Suposiciones y convenciones
 
 Monorepo o multi-paquete: detectar y documentar.
 
@@ -32,7 +35,7 @@ Lenguajes principales y gestor de paquetes: detectar y documentar.
 
 Formato objetivo para importación de la app: p. ej., CSV/JSON específico, OFX, QIF o un esquema propietario. Si existe un schema local, referenciarlo.
 
-1. Alcance de la revisión técnica
+4) Alcance de la revisión técnica
 
 Arquitectura y límites
 
@@ -66,7 +69,7 @@ Pruebas y tooling
 
 Cobertura, pruebas unitarias y de integración. Linters, type checkers, formatters.
 
-5. Hipótesis del fallo del agente PDF
+5) Hipótesis del fallo del agente PDF
 
 Interferencias de dependencias nuevas del agente de Autocategorización que afecten parsing o runtime del PDF.
 
@@ -76,7 +79,7 @@ Orden de arranque y service wiring.
 
 Valida o refuta cada hipótesis con evidencia del código y logs.
 
-6. Subagentes a desplegar
+6) Subagentes a desplegar
 
 Subagente A: Mapa del Repositorio
 
@@ -114,7 +117,7 @@ Hallazgos de dependencias y compatibilidades.
 
 Sección “cambios mínimos para restaurar PDF”.
 
-7. Plan de corrección y mejora
+7) Plan de corrección y mejora
 
 Entrega un fix_plan.md con secciones:
 
@@ -130,7 +133,7 @@ Backout plan si algo empeora.
 
 Incluye una tabla de tareas con: ID, descripción, dueño sugerido, esfuerzo (S/M/L), prioridad (P0–P2), criterios de aceptación, dependencias.
 
-8. Pruebas y datos de ejemplo
+8) Pruebas y datos de ejemplo
 
 Genera o localiza fixtures de PDF representativos: digital nativo y escaneado. Incluye variantes con diferentes bancos, separadores decimales y formatos de fecha.
 
@@ -142,7 +145,7 @@ Transacciones estructuradas → categorización sugerida con puntaje de confianz
 
 Agrega e2e_spec.md con pasos reproducibles y comandos.
 
-9. Criterios de aceptación
+9) Criterios de aceptación
 
 El agente PDF vuelve a procesar correctamente los PDFs provistos, con validaciones de esquema y totales conciliados.
 
@@ -152,7 +155,7 @@ Existen pruebas automatizadas que cubren ambos flujos y se integran al CI local 
 
 Se entregan repo_map.md, risk_report.md, fix_plan.md, e2e_spec.md en la carpeta docs/ del repo.
 
-10. Salidas esperadas
+10) Salidas esperadas
 
 Coloca estos archivos en docs/:
 
@@ -166,7 +169,9 @@ e2e_spec.md
 
 CHANGELOG.md actualizado con correcciones y mejoras
 
-11. Instrucciones operativas
+Todos los outputs deben entregarse en la carpeta /TEMP-DOC
+
+11) Instrucciones operativas
 
 Detecta gestor de paquetes y ejecuta instalación limpia. Ejemplos:
 
@@ -184,15 +189,7 @@ Ejecuta el agente de Autocategorización sobre un subset de transacciones. No mo
 
 Produce los informes en docs/.
 
-12. Políticas de seguridad y datos
-
-No subas datos reales ni credenciales a servicios externos.
-
-Ofusca o sintetiza PDFs de ejemplo si contienen datos sensibles.
-
-Mantén idempotencia en scripts de migración y en procesos de categorización.
-
-13. Formato de status update final
+12)  Formato de status update final
 
 Entrega un resumen en Markdown dentro de docs/status_update.md con:
 
@@ -202,38 +199,5 @@ Riesgos abiertos y mitigaciones.
 
 Próximos 3 pasos con fechas tentativas.
 
-14. Bloque de comandos sugeridos
+---
 
-Adapta según stack real detectado y agrega los que correspondan.
-
-# 1) Instalar dependencias
-
-make setup || true
-npm ci || yarn install --frozen-lockfile || pnpm install || pip install -r requirements.txt
-
-# 2) Linter y tipos
-
-npm run lint || yarn lint || ruff check . || flake8 .
-npm run typecheck || mypy . || pyright
-
-# 3) Pruebas
-
-npm test || yarn test || pytest -q || uv run pytest -q
-
-# 4) Auditoría de dependencias
-
-npm audit --audit-level=moderate || yarn npm audit || pip-audit || safety check
-
-# 5) Generar docs
-
-mkdir -p docs
-
-# Los subagentes escriben repo_map.md, risk_report.md, fix_plan.md, e2e_spec.md, status_update.md
-
-15. Señales de éxito
-
-Pruebas verdes para los flujos PDF → app y Autocategorización.
-
-Informe de riesgos con acciones claras y responsables sugeridos.
-
-Código con límites de módulo más nítidos, sin efectos colaterales entre agentes.

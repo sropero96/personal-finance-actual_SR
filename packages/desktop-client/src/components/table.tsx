@@ -1148,6 +1148,7 @@ export const Table = forwardRef(
     }
 
     const isEmpty = (count || items.length) === 0;
+    console.log('[Table] isEmpty:', isEmpty, 'items.length:', items.length, 'count:', count);
 
     return (
       <View
@@ -1177,10 +1178,13 @@ export const Table = forwardRef(
           ) : (
             <AutoSizer>
               {({ width, height }) => {
+                console.log('[Table AutoSizer] width:', width, 'height:', height);
                 if (width === 0 || height === 0) {
+                  console.log('[Table AutoSizer] Returning null because width or height is 0');
                   return null;
                 }
 
+                console.log('[Table AutoSizer] Rendering FixedSizeList with', items.length, 'items');
                 return (
                   <AvoidRefocusScrollProvider>
                     <FixedSizeList
