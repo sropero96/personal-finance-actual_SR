@@ -861,7 +861,7 @@ const server = app.listen(PORT, () => {
   console.log(`🏥 Health check: GET http://localhost:${PORT}/health\n`);
 });
 
-// Set server timeout to 6 minutes (360 seconds)
-// This provides buffer for Agent 2's 5-minute client timeout + processing overhead
-server.setTimeout(360000);
-console.log('⏱️  Server timeout configured: 6 minutes (360 seconds)');
+// Set server timeout to 21 minutes (1260 seconds)
+// This provides buffer for Agent 2's extended processing time + overhead
+server.setTimeout(1260000);
+console.log('⏱️  Server timeout configured: 21 minutes (1260 seconds)');
