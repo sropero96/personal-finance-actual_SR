@@ -99,7 +99,16 @@ function deduplicateAndSort(transactions) {
 function ruleMatches(rule, transaction) {
   return rule.conditions.every(condition => {
     const { field, op, value } = condition;
-    const txValue = String(transaction[field] || '').toLowerCase();
+
+    // FIX V57: Handle both 'payee' and 'payee_name' field names
+    // Frontend sends payee_name, but rules use 'payee'
+    let txValue;
+    if (field === 'payee') {
+      txValue = String(transaction.payee_name || transaction.payee || '').toLowerCase();
+    } else {
+      txValue = String(transaction[field] || '').toLowerCase();
+    }
+
     const conditionValue = String(value).toLowerCase();
 
     switch (op) {

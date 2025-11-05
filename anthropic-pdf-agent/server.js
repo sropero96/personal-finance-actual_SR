@@ -95,6 +95,31 @@ const anthropic = new Anthropic({
   apiKey: REQUIRED_CONFIG.VITE_ANTHROPIC_API_KEY,
 });
 
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+/**
+ * Clean Claude response by removing markdown code blocks
+ * FIX V58: Claude sometimes wraps JSON in markdown ```json ... ```
+ * This helper ensures we get raw JSON for parsing
+ *
+ * @param {string} text - Raw response text from Claude
+ * @returns {string} Cleaned JSON text ready for parsing
+ */
+function cleanClaudeResponse(text) {
+  let cleaned = text.trim();
+
+  // Remove markdown code blocks if present
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned
+      .replace(/```json?\n?/g, '')  // Remove opening ```json or ```
+      .replace(/```\n?$/g, '');      // Remove closing ```
+  }
+
+  return cleaned;
+}
+
 /**
  * Agent Tool: Read PDF and extract text
  */
@@ -670,11 +695,22 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
       console.log(`  🤖 Calling Claude for "${payee}"...`);
       claudeCallsCount++;
 
+      // FIX V57: Transform historical data to match prompt expectations
+      // Each historical entry has {categoryName, category, frequency, lastUsed, examples[]}
+      // Prompt expects [{payeeName, categoryName, category, date, frequency}, ...]
       const promptResult = buildCategorizationPrompt({
         transaction,
         userCategories,
         activeRules,
-        similarTransactions: historicalData.flatMap(h => h.examples || []),
+        similarTransactions: historicalData.flatMap(h =>
+          h.examples.map(payeeName => ({
+            payeeName: payeeName,
+            categoryName: h.categoryName,
+            category: h.category,
+            date: h.lastUsed,
+            frequency: h.frequency,
+          }))
+        ),
       });
 
       if (promptResult.skipClaude) {
@@ -704,13 +740,35 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
           `  📝 Claude response: ${responseText.substring(0, 100)}...`,
         );
 
-        // Parse Claude's JSON response
-        const claudeResult = JSON.parse(responseText);
+        // FIX V58: Clean markdown wrapping before parsing
+        // Claude sometimes wraps JSON in ```json ... ``` code blocks
+        const cleanedText = cleanClaudeResponse(responseText);
+        const claudeResult = JSON.parse(cleanedText);
 
         // Map category name to ID
         const category = userCategories.find(
           c => c.name === claudeResult.category,
         );
+
+        // FIX V63: Validate category exists before accepting suggestion
+        if (claudeResult.category !== null && !category) {
+          console.warn(
+            `  ⚠️  Claude suggested invalid category: "${claudeResult.category}"`,
+          );
+          console.warn(
+            `  ⚠️  Available categories: ${userCategories.map(c => c.name).join(', ')}`,
+          );
+
+          suggestions.push({
+            transaction_id: transaction.id,
+            category: null, // ← Reject invalid category
+            categoryId: null,
+            confidence: 0,
+            reasoning: `AI suggested invalid category "${claudeResult.category}" not in user's list. Manual categorization required.`,
+            source: 'error',
+          });
+          continue; // Skip to next transaction
+        }
 
         suggestions.push({
           transaction_id: transaction.id,
@@ -725,13 +783,33 @@ app.post('/api/suggest-categories', express.json(), async (req, res) => {
           `  ✅ Claude suggested: ${claudeResult.category} (${claudeResult.confidence})`,
         );
       } catch (error) {
+        // FIX V57: Add detailed error diagnostics
         console.error(`  ❌ Claude error for "${payee}":`, error.message);
+        console.error(`  📋 Error type:`, error.constructor.name);
+        console.error(`  📋 Error stack:`, error.stack?.substring(0, 500));
+
+        if (error.response) {
+          console.error(`  📋 API Response Status:`, error.response.status);
+          console.error(
+            `  📋 API Response Body:`,
+            JSON.stringify(error.response.data, null, 2).substring(0, 500),
+          );
+        }
+
+        // Log prompt preview for debugging
+        if (promptResult && promptResult.prompt) {
+          console.error(
+            `  📋 Prompt preview (first 300 chars):`,
+            promptResult.prompt.substring(0, 300),
+          );
+        }
+
         suggestions.push({
           transaction_id: transaction.id,
           category: null,
           categoryId: null,
           confidence: 0,
-          reasoning: 'AI categorization failed',
+          reasoning: `AI categorization failed: ${error.message}`,
           source: 'error',
         });
       }
@@ -769,8 +847,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server with extended timeout
+const server = app.listen(PORT, () => {
   console.log(
     `\n🚀 Anthropic Agent Server running on http://localhost:${PORT}`,
   );
@@ -782,3 +860,8 @@ app.listen(PORT, () => {
   );
   console.log(`🏥 Health check: GET http://localhost:${PORT}/health\n`);
 });
+
+// Set server timeout to 6 minutes (360 seconds)
+// This provides buffer for Agent 2's 5-minute client timeout + processing overhead
+server.setTimeout(360000);
+console.log('⏱️  Server timeout configured: 6 minutes (360 seconds)');

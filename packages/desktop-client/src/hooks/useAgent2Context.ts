@@ -107,23 +107,30 @@ export function useAgent2Context(
 
   // Query historical transactions (only for relevant payees)
   const historicalQuery = useMemo(() => {
-    // Only query if we have payees to filter by
-    if (payeeFilters.ids.length === 0) {
+    // FIX V60: Only query if we have payees to filter by (check both IDs and names)
+    if (payeeFilters.ids.length === 0 && payeeFilters.names.length === 0) {
       return null;
+    }
+
+    const filters: any[] = [];
+
+    if (payeeFilters.ids.length > 0) {
+      filters.push({ payee: { $oneof: payeeFilters.ids } });
+    }
+
+    if (payeeFilters.names.length > 0) {
+      filters.push({ imported_payee: { $oneof: payeeFilters.names } });
     }
 
     return q('transactions')
       .filter({
-        $or: [
-          { payee: { $oneof: payeeFilters.ids } },
-          // Note: imported_payee filter not needed - we use payee ID for historical data
-        ],
+        $or: filters, // Match EITHER payee ID OR imported_payee name
         category: { $ne: null }, // Only categorized transactions
       })
       .orderBy({ date: 'desc' })
       .limit(500) // Performance limit - fetch recent transactions only
       .select(['id', 'payee', 'imported_payee', 'category', 'date', 'notes']);
-  }, [payeeFilters.ids]);
+  }, [payeeFilters.ids, payeeFilters.names]);
 
   const {
     data: historicalData,
@@ -148,13 +155,24 @@ export function useAgent2Context(
   const rules = useMemo(() => {
     if (!rulesData) return [];
 
-    return rulesData
-      .filter(rule => rule.conditions && rule.actions)
+    const filtered = rulesData
+      .filter(rule => {
+        return rule.conditions && rule.actions &&
+               rule.conditions.length > 0 &&
+               rule.actions.length > 0;
+      })
       .map(rule => ({
         id: rule.id,
         conditions: rule.conditions || [],
         actions: rule.actions || [],
       })) as Agent2Rule[];
+
+    console.log('[useAgent2Context] Rules processed:', {
+      fetched: rulesData.length,
+      afterFilter: filtered.length,
+    });
+
+    return filtered;
   }, [rulesData]);
 
   const historicalTransactions = useMemo(() => {
@@ -218,9 +236,17 @@ export async function fetchAgent2Context(
   transactions: TransactionEntity[],
   categoriesData: any[], // CategoryEntity[]
 ): Promise<Omit<Agent2Context, 'isLoading' | 'error'>> {
-  // Extract unique payee IDs
+  // FIX V60: Extract BOTH payee IDs (for existing transactions) AND payee names (for imports)
   const payeeIds = Array.from(
     new Set(transactions.map(tx => tx.payee).filter(Boolean) as string[]),
+  );
+
+  const payeeNames = Array.from(
+    new Set(
+      transactions
+        .map(tx => tx.imported_payee || (tx as any).payee_name)
+        .filter(Boolean) as string[],
+    ),
   );
 
   // Fetch rules
@@ -229,22 +255,58 @@ export async function fetchAgent2Context(
   // Fetch historical transactions
   let historicalData: TransactionEntity[] = [];
 
-  if (payeeIds.length > 0) {
-    historicalData = await send('transactions-query', {
-      query: q('transactions')
+  // FIX V60: Query by NAMES for imported transactions OR IDs for existing transactions
+  if (payeeNames.length > 0 || payeeIds.length > 0) {
+    const filters: any[] = [];
+
+    if (payeeIds.length > 0) {
+      filters.push({ payee: { $oneof: payeeIds } });
+    }
+
+    if (payeeNames.length > 0) {
+      filters.push({ imported_payee: { $oneof: payeeNames } });
+    }
+
+    // FIX V60.2: send('query') returns {data: [...], dependencies: [...]}, not array directly
+    const queryResult = await send(
+      'query',
+      q('transactions')
         .filter({
-          payee: { $oneof: payeeIds },
+          $or: filters, // Match EITHER payee ID OR imported_payee name
           category: { $ne: null },
         })
         .orderBy({ date: 'desc' })
         .limit(500)
         .select(['id', 'payee', 'imported_payee', 'category', 'date', 'notes'])
         .serialize(),
-    });
+    );
+
+    // Extract .data and validate it's an array
+    historicalData = (queryResult?.data && Array.isArray(queryResult.data))
+      ? queryResult.data
+      : [];
   }
 
-  // Transform categories
-  const categories = categoriesData
+  console.log('[fetchAgent2Context V60.2] Historical data fetched:', {
+    total: Array.isArray(historicalData) ? historicalData.length : 0,
+    payeeIds: payeeIds.length,
+    payeeNames: payeeNames.length,
+    sample: Array.isArray(historicalData) ? historicalData.slice(0, 2) : [],
+  });
+
+  // Transform categories - FIX V60: Ensure it's always an array
+  // Handle both array input and object with .list property
+  let categoriesArray = Array.isArray(categoriesData)
+    ? categoriesData
+    : (categoriesData?.list || []);
+
+  // Final safety check: ensure it's really an array
+  if (!Array.isArray(categoriesArray)) {
+    console.warn('[fetchAgent2Context V60] categoriesData is not an array:', typeof categoriesArray);
+    categoriesArray = [];
+  }
+
+  const categories = categoriesArray
     .filter(
       cat => !cat.hidden && cat.id !== 'income' && cat.id !== 'uncategorized',
     )
@@ -253,22 +315,36 @@ export async function fetchAgent2Context(
       name: cat.name,
     }));
 
-  // Transform rules
-  const rules = (rulesData || [])
-    .filter(rule => rule.active && rule.conditions && rule.actions)
+  // Transform rules - FIX V60: Ensure rulesData is an array
+  // Remove aggressive 'active' check - focus on content validation
+  const rulesArray = Array.isArray(rulesData) ? rulesData : [];
+  const rules = rulesArray
+    .filter(rule => {
+      return rule.conditions && rule.actions &&
+             rule.conditions.length > 0 &&
+             rule.actions.length > 0;
+    })
     .map(rule => ({
       id: rule.id,
       conditions: rule.conditions || [],
       actions: rule.actions || [],
     })) as Agent2Rule[];
 
+  console.log('[fetchAgent2Context V60] Rules processed:', {
+    fetched: rulesArray.length,
+    afterFilter: rules.length,
+    sample: rules.length > 0 ? rules.slice(0, 2) : [],
+  });
+
   // Transform historical transactions
   const grouped = new Map<string, Agent2HistoricalTransaction>();
 
-  (historicalData || []).forEach(tx => {
+  // FIX V60.2: Defensive check - ensure historicalData is actually an array
+  const safeHistoricalData = Array.isArray(historicalData) ? historicalData : [];
+  safeHistoricalData.forEach(tx => {
     if (!tx.category) return;
 
-    const category = categoriesData.find(cat => cat.id === tx.category);
+    const category = categoriesArray.find(cat => cat.id === tx.category);
     if (!category) return;
 
     // Use utility function to get payee name

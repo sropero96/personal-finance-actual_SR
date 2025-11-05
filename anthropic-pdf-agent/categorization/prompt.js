@@ -33,25 +33,26 @@ function buildCategorizationPrompt(context) {
     };
   }
 
-  // Build prompt for Claude
+  // Build prompt for Claude with PRIORITY SYSTEM
   const prompt = `You are a transaction categorization expert for Actual Budget, a personal finance app.
 
 I will provide you with:
 1. A transaction that needs categorization
 2. The user's available categories (their personal list)
 3. Similar historical transactions with categories assigned
-4. Active categorization rules (if any)
+4. Active categorization rules (user's manual rules)
 
-Your task is to suggest the BEST category from the user's list.
+Your task is to suggest the BEST category from the user's list using a PRIORITY SYSTEM.
 
 ## USER'S CATEGORIES
 ${JSON.stringify(
-  userCategories.map(c => ({
-    id: c.id,
-    name: c.name,
-    group: c.groupName,
-    isIncome: c.isIncome,
-  })),
+  userCategories.map(c => {
+    // FIX V57: Only include fields that are defined to avoid undefined in JSON
+    const category = { id: c.id, name: c.name };
+    if (c.groupName !== undefined) category.group = c.groupName;
+    if (c.isIncome !== undefined) category.isIncome = c.isIncome;
+    return category;
+  }),
   null,
   2,
 )}
@@ -64,7 +65,7 @@ ${JSON.stringify(
   "notes": "${transaction.notes || ''}"
 }
 
-## HISTORICAL CONTEXT
+## HISTORICAL CONTEXT (User's Past Behavior)
 ${
   similarTransactions.length > 0
     ? JSON.stringify(
@@ -72,7 +73,7 @@ ${
           payee: tx.payeeName,
           category: tx.categoryName,
           date: tx.date,
-          amount: tx.amount,
+          frequency: tx.frequency || 1,
         })),
         null,
         2,
@@ -80,33 +81,72 @@ ${
     : '(No similar transactions found in history)'
 }
 
+## ACTIVE RULES (User's Manual Rules)
+${
+  activeRules && activeRules.length > 0
+    ? JSON.stringify(
+        activeRules.map(rule => ({
+          conditions: rule.conditions,
+          actions: rule.actions,
+        })),
+        null,
+        2,
+      )
+    : '(No active rules found - user has not set up automatic categorization rules)'
+}
+
+## PRIORITY SYSTEM FOR CATEGORIZATION
+
+**PRIORITY 1 - User's Explicit Rules (Confidence: 95-99%)**
+- If transaction matches a user rule (even partially), USE THAT CATEGORY
+- Rules represent explicit user intent and override everything else
+- Example: Rule "payee contains 'Amazon' → Shopping" means confidence >= 98%
+
+**PRIORITY 2 - Strong Historical Patterns (Confidence: 85-95%)**
+- If payee appears 5+ times in history with SAME category, use it
+- If payee appears 3-4 times consistently, confidence 90%
+- Example: "Starbucks" → "Coffee" (10 times) = 95% confidence
+
+**PRIORITY 3 - Weak Historical Patterns (Confidence: 70-85%)**
+- If payee appears 1-2 times in history
+- Or similar payee names with same category
+- Example: "Starbucks Madrid" → "Coffee" (1 time) = 75% confidence
+
+**PRIORITY 4 - AI Inference (Confidence: 50-70%)**
+- New payee with NO history
+- Use merchant name, amount, context clues
+- Example: "La Mina, Madrid" (restaurant name) → "Salidas" = 65% confidence
+
 ## INSTRUCTIONS
 
-1. **ONLY suggest categories that exist in USER'S CATEGORIES** (never invent new ones)
-2. **Learn from history** - If the payee appears multiple times, use the most frequent category
-3. **Consider amount** - Income vs expense categories based on positive/negative amount
-4. **Reason clearly** - Explain your decision
-5. **Be honest about confidence** - If unsure, say so (confidence < 0.7)
+1. **CRITICAL**: ONLY suggest categories from USER'S CATEGORIES list (never invent)
+   - VALID CATEGORIES: ${userCategories.map(c => `"${c.name}"`).join(', ')}
+   - If you suggest a category NOT in this list, your response will be rejected
+   - Example: "Comida" is INVALID if not listed above (you MUST use the exact names)
+2. **Follow priority system**: Rules > History (5+) > History (1-4) > AI Inference
+3. **Learn from history**: If frequency >= 5, confidence should be 90-95%
+4. **Consider partial rule matches**: If payee contains keyword from rule, apply it
+5. **Be honest**: If no strong signal (confidence < 50%), return null
 
 ## OUTPUT FORMAT
 
-Return ONLY a JSON object (no markdown, no code blocks):
+You MUST return ONLY raw JSON with NO markdown formatting, NO code blocks (no \`\`\`), NO explanations.
 
-{
-  "category": "Category Name",
-  "confidence": 0.92,
-  "reasoning": "Brief explanation of why this category was chosen"
-}
+Your response must be EXACTLY this structure on a single line:
+{"category":"Category Name","confidence":0.92,"reasoning":"Brief explanation"}
 
-If you cannot suggest a category with confidence >= 0.5, return:
+Example valid responses (use compact format):
+{"category":"Salidas","confidence":0.85,"reasoning":"Priority 2: Starbucks appears 10 times in history with Salidas"}
+{"category":"Restaurantes","confidence":0.92,"reasoning":"Priority 1: Matches rule 'payee contains restaurant'"}
+{"category":null,"confidence":0,"reasoning":"No strong signal: no history, unclear merchant"}
 
-{
-  "category": null,
-  "confidence": 0,
-  "reasoning": "Reason why categorization is uncertain"
-}
+CRITICAL RULES:
+- Start your response directly with { (not with \`\`\`)
+- End your response directly with } (not with \`\`\`)
+- Use compact format (no extra spaces or newlines inside the JSON)
+- Return ONLY the JSON object - nothing before or after it
 
-IMPORTANT: Return ONLY the JSON object, nothing else.`;
+DO NOT wrap your response in markdown code blocks. DO NOT add explanations outside the JSON.`;
 
   return { skipClaude: false, prompt };
 }
