@@ -11,7 +11,6 @@ import { Trans , useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { AnimatedLoading } from '@actual-app/components/icons/AnimatedLoading';
-import { Stack } from '@actual-app/components/stack';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -70,6 +69,28 @@ export function AICategorizeModal({
     return map;
   }, [transactions]);
 
+  // FIX V59: Sort suggestions by confidence (descending) - show all ordered
+  const sortedSuggestions = useMemo(() => {
+    return [...suggestions].sort((a, b) => b.confidence - a.confidence);
+  }, [suggestions]);
+
+  // FIX V59: Debug logging for ID verification
+  useMemo(() => {
+    const transactionIds = transactions.map(t => t.id);
+    const suggestionIds = suggestions.map(s => s.transaction_id);
+    const mismatches = suggestions.filter(s => !transactionMap.has(s.transaction_id));
+
+    console.log('[AICategorizeModal V59] Debug:', {
+      transactionCount: transactions.length,
+      suggestionCount: suggestions.length,
+      transactionIds: transactionIds.slice(0, 5),
+      suggestionIds: suggestionIds.slice(0, 5),
+      mismatchCount: mismatches.length,
+      mismatches: mismatches.slice(0, 3).map(s => s.transaction_id),
+    });
+    return null;
+  }, [transactions, suggestions, transactionMap]);
+
   // Toggle selection for a transaction
   const toggleSelection = useCallback((transactionId: string) => {
     setSelectedIds(prev => {
@@ -101,8 +122,9 @@ export function AICategorizeModal({
       const appliedCategories = new Map<string, string>();
 
       suggestions.forEach(sug => {
-        if (selectedIds.has(sug.transaction_id) && sug.categoryId) {
-          appliedCategories.set(sug.transaction_id, sug.categoryId);
+        if (selectedIds.has(sug.transaction_id) && sug.category) {
+          // FIX V65: Use category NAME instead of ID (Transaction component expects name)
+          appliedCategories.set(sug.transaction_id, sug.category);
         }
       });
 
@@ -116,37 +138,74 @@ export function AICategorizeModal({
   }, [selectedIds, suggestions, onApply, onClose]);
 
   const selectedCount = selectedIds.size;
-  const totalSuggestions = suggestions.filter(s => s.categoryId).length;
+  // FIX V59: Show total count of ALL suggestions, not filtered by categoryId
+  const totalSuggestions = suggestions.length;
 
   return (
-    <Modal name="ai-categorize" style={{ width: 700, height: 600 }}>
+    <Modal
+      name="ai-categorize"
+      containerProps={{
+        style: {
+          width: 700,
+          maxWidth: '90vw',
+          height: '85vh',
+          maxHeight: 700,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden', // FIX V61: Prevent double scroll context
+        },
+      }}
+    >
       <ModalHeader
         title={t('AI Category Suggestions')}
         rightContent={<ModalCloseButton onPress={onClose} />}
       />
 
-      <Stack
-        spacing={3}
+      {/* FIX V61: Force pointerEvents to enable clicks */}
+      <View
         style={{
-          padding: 20,
-          paddingTop: 10,
           flex: 1,
-          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          pointerEvents: 'auto', // FIX V61: Override modal's pointerEvents: 'none'
         }}
       >
-        {/* Summary Header */}
+        {/* FIX V66: Remove gap (doesn't work with Vite CSS-in-JS) - use marginBottom on children */}
+        <View
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            // FIX V66: Removed gap: 20 - causes card stacking when many suggestions
+            padding: 20,
+            paddingTop: 10,
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+          }}
+        >
+        {/* Summary Header - FIX V60: Clearer wording */}
         <View
           style={{
             padding: 12,
             backgroundColor: theme.tableRowHeaderBackground,
             borderRadius: 4,
+            marginBottom: 20, // FIX V66: Explicit margin for spacing (gap doesn't work)
           }}
         >
-          <Text style={{ fontWeight: 600 }}>
-            {t('{{count}} of {{total}} transactions ready to categorize', {
-              count: selectedCount,
-              total: totalSuggestions,
-            })}
+          <Text style={{ fontWeight: 600, fontSize: 14 }}>
+            {t('{{total}} suggestions processed', { total: totalSuggestions })}
+          </Text>
+          <Text
+            style={{
+              fontSize: 13,
+              color: theme.pageTextSubdued,
+              marginTop: 4,
+            }}
+          >
+            {selectedCount > 0
+              ? t('{{count}} selected for import', { count: selectedCount })
+              : t('Select transactions to apply suggestions')}
           </Text>
           {selectedCount < totalSuggestions && (
             <Button
@@ -159,60 +218,74 @@ export function AICategorizeModal({
           )}
         </View>
 
-        {/* Suggestions List */}
-        {suggestions.map(suggestion => {
+        {/* Suggestions List - FIX V72: Force max-content height per row */}
+        <View
+          style={{
+            display: 'grid',
+            gridAutoFlow: 'row',
+            gridTemplateColumns: '1fr',
+            rowGap: 20,
+            gridAutoRows: 'max-content', // FIX V72: Force each row to take full content height
+            alignContent: 'start',
+          }}
+        >
+        {sortedSuggestions.map(suggestion => {
           const transaction = transactionMap.get(suggestion.transaction_id);
-          if (!transaction) return null;
-
           const isSelected = selectedIds.has(suggestion.transaction_id);
           const hasCategory = Boolean(suggestion.categoryId);
           const confidencePercent = Math.round(suggestion.confidence * 100);
 
           return (
-            <View
-              key={suggestion.transaction_id}
-              style={{
-                padding: 12,
-                backgroundColor: isSelected
-                  ? theme.tableRowBackgroundHover
-                  : theme.tableBackground,
-                border: `1px solid ${theme.tableBorder}`,
-                borderRadius: 4,
-                cursor: hasCategory ? 'pointer' : 'not-allowed',
-                opacity: hasCategory ? 1 : 0.6,
-              }}
-              onClick={() =>
-                hasCategory && toggleSelection(suggestion.transaction_id)
-              }
-            >
+            <View key={suggestion.transaction_id} style={{ display: 'block', width: '100%' }}>
+              <View
+                style={{
+                  padding: 16,
+                  backgroundColor: isSelected
+                    ? theme.tableRowBackgroundHover
+                    : theme.tableBackground,
+                  border: `1px solid ${theme.tableBorder}`,
+                  borderRadius: 4,
+                  cursor: hasCategory ? 'pointer' : 'not-allowed',
+                  opacity: hasCategory ? 1 : 0.6,
+                  overflow: 'visible', // FIX V71: Allow card to grow with content
+                  contain: 'layout paint', // FIX V71: Encapsulate layout/paint without clipping
+                  isolation: 'isolate',
+                  display: 'flow-root',
+                }}
+                onClick={() =>
+                  hasCategory && toggleSelection(suggestion.transaction_id)
+                }
+              >
+              {/* FIX V68: Removed position/zIndex that were causing text escape */}
               <View
                 style={{
                   flexDirection: 'row',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   gap: 12,
                 }}
               >
-                {/* Checkbox icon */}
+                {/* Checkbox icon - FIX V60: Larger and more visible */}
                 {hasCategory && (
                   <View
                     style={{
-                      width: 20,
-                      height: 20,
-                      border: `2px solid ${theme.tableBorder}`,
-                      borderRadius: 4,
+                      width: 24,
+                      height: 24,
+                      border: `2px solid ${isSelected ? theme.noticeTextLight : theme.tableBorder}`,
+                      borderRadius: 6,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: isSelected
                         ? theme.noticeTextLight
                         : 'transparent',
+                      transition: 'all 0.2s ease',
                     }}
                   >
                     {isSelected && (
                       <Text
                         style={{
                           color: 'white',
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: 'bold',
                         }}
                       >
@@ -222,31 +295,51 @@ export function AICategorizeModal({
                   </View>
                 )}
 
-                {/* Transaction Info */}
-                <View style={{ flex: 1 }}>
+                {/* Transaction Info - FIX V72: Added alignSelf stretch */}
+                <View style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 60,
+                  minWidth: 0,
+                  alignSelf: 'stretch', // FIX V72: Stretch to fill parent height
+                }}>
+                  {/* FIX V65: Payee/Amount row with marginBottom for spacing */}
                   <View
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 8,
+                      gap: 10, // FIX V63: Increased from 8px to 10px (horizontal gap works better)
+                      flexWrap: 'wrap',
+                      minHeight: 24,
+                      paddingBottom: 2, // FIX V63: Add bottom padding when content wraps
+                      marginBottom: 14, // FIX V65: Explicit margin instead of parent gap
                     }}
                   >
                     <Text style={{ fontWeight: 600 }}>
-                      {transaction.imported_payee || transaction.payee || 'Unknown'}
+                      {transaction?.imported_payee || transaction?.payee_name || transaction?.payee || suggestion.category || 'Unknown Transaction'}
                     </Text>
                     <Text style={{ color: theme.pageTextSubdued }}>
-                      ${Math.abs(transaction.amount || 0).toFixed(2)}
+                      ${Math.abs(transaction?.amount || 0).toFixed(2)}
                     </Text>
                   </View>
 
-                  {/* Suggestion */}
+                  {/* Suggestion - FIX V71: Force column layout for category + reasoning */}
                   {hasCategory ? (
-                    <View style={{ marginTop: 4 }}>
+                    <View style={{
+                      display: 'flex',
+                      flexDirection: 'column', // FIX V71: Stack category and reasoning vertically
+                      alignItems: 'stretch',
+                      gap: 8, // FIX V71: Spacing between category row and reasoning
+                      minWidth: 0,
+                      paddingTop: 8,
+                      borderTop: `1px solid ${theme.tableBorder}20`,
+                    }}>
                       <View
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 6,
+                          gap: 8,
                         }}
                       >
                         <Text>→</Text>
@@ -267,11 +360,19 @@ export function AICategorizeModal({
                           {confidencePercent}%
                         </Text>
                       </View>
+                      {/* FIX V71: Full-width block with aggressive wrapping */}
                       <Text
                         style={{
+                          display: 'block',
+                          width: '100%',
+                          alignSelf: 'stretch',
+                          whiteSpace: 'normal',
                           fontSize: 12,
                           color: theme.pageTextSubdued,
-                          marginTop: 2,
+                          lineHeight: 1.6,
+                          paddingLeft: 16,
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
                         }}
                       >
                         {suggestion.reasoning}
@@ -290,11 +391,29 @@ export function AICategorizeModal({
                   )}
                 </View>
               </View>
+              </View>
             </View>
           );
         })}
-      </Stack>
+        </View>
 
+        {/* FIX V60: Scroll indicator when many suggestions */}
+        {totalSuggestions > 5 && (
+          <Text
+            style={{
+              textAlign: 'center',
+              fontSize: 12,
+              color: theme.pageTextSubdued,
+              padding: 8,
+              fontStyle: 'italic',
+            }}
+          >
+            ↕ Scroll to see all {totalSuggestions} suggestions
+          </Text>
+        )}
+      </View>
+
+      {/* FIX V62: Move buttons INSIDE pointerEvents wrapper so they receive clicks */}
       {/* Action Buttons */}
       <View
         style={{
@@ -324,6 +443,8 @@ export function AICategorizeModal({
           )}
         </Button>
       </View>
+      </View>
+
     </Modal>
   );
 }

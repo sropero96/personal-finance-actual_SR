@@ -466,9 +466,15 @@ export function ImportTransactionsModal({
           multiplierAmount,
         );
         console.log('[parse] getImportPreview returned:', transactionPreview.length, 'transactions');
-        console.log('[parse] Calling setTransactions...');
-        setTransactions(transactionPreview);
-        console.log('[parse] setTransactions called successfully');
+
+        // Assign unique temporary IDs for Agent 2 matching
+        const transactionsWithIds = transactionPreview.map((t, index) => ({
+          ...t,
+          temp_import_id: `import-${index}`,
+        }));
+
+        console.log('[parse] Assigned temp_import_id to', transactionsWithIds.length, 'transactions');
+        setTransactions(transactionsWithIds);
       }
     },
     // We use some state variables from the component, but do not want to re-parse when they change
@@ -654,8 +660,9 @@ export function ImportTransactionsModal({
       console.log('[ImportTransactionsModal] Fetching Agent 2 context...');
       const context = await fetchAgent2Context(
         uncategorizedTransactions.map(t => ({
-          id: String(t.trns_id || t.id || `temp-${Math.random()}`),
+          id: String(t.temp_import_id || ''),
           payee: String(t.payee || ''),
+          imported_payee: String(t.payee_name || t.imported_payee || ''), // FIX V60: Add for historical query
           amount:
             typeof t.amount === 'number'
               ? t.amount
@@ -664,7 +671,7 @@ export function ImportTransactionsModal({
           notes: String(t.notes || ''),
           account: accountId, // Add required field for TransactionEntity
         })) as any, // Cast to avoid type mismatch between ImportTransaction and TransactionEntity
-        categories,
+        categories.list, // Pass the list array, not the whole object
       );
 
       console.log('[ImportTransactionsModal] Context fetched:', {
@@ -677,7 +684,7 @@ export function ImportTransactionsModal({
       console.log('[ImportTransactionsModal] Calling Agent 2...');
       const response = await suggestCategoriesWithRetry({
         transactions: uncategorizedTransactions.map(t => ({
-          id: String(t.trns_id || t.id || `temp-${Math.random()}`),
+          id: String(t.temp_import_id || ''),
           payee_name: String(t.payee || ''),
           payee: String(t.payee || ''),
           amount:
@@ -696,6 +703,20 @@ export function ImportTransactionsModal({
         success: response.success,
         suggestions: response.suggestions.length,
         claudeCalls: response.stats?.claudeCalls,
+      });
+
+      // Debug: Verify ID matching for modal lookup
+      console.log('[ImportTransactionsModal] ID Matching Debug:', {
+        suggestionsCount: response.suggestions.length,
+        firstSuggestion: response.suggestions[0],
+        transactionIds: uncategorizedTransactions.slice(0, 5).map(t => ({
+          temp_import_id: t.temp_import_id,
+          type: typeof t.temp_import_id,
+        })),
+        suggestionIds: response.suggestions.slice(0, 5).map(s => ({
+          transaction_id: s.transaction_id,
+          type: typeof s.transaction_id,
+        })),
       });
 
       // Step 5: Show modal with suggestions
@@ -730,8 +751,13 @@ export function ImportTransactionsModal({
 
     // Update transactions with selected categories
     const updatedTransactions = transactions.map(trans => {
-      const transId = String(trans.trns_id || trans.id || '');
+      const transId = String(trans.temp_import_id || trans.trns_id || trans.id || '');
       if (appliedCategories.has(transId)) {
+        console.log('[ImportTransactionsModal] Applying category to transaction:', {
+          transId,
+          category: appliedCategories.get(transId),
+          transaction: trans.payee || trans.imported_payee,
+        });
         return {
           ...trans,
           category: appliedCategories.get(transId),
@@ -1415,13 +1441,18 @@ export function ImportTransactionsModal({
                       (!t.category || t.category === 'uncategorized'),
                   )
                   .map(t => ({
-                    id: String(t.trns_id || t.id || ''),
-                    payee: String(t.payee || ''),
+                    // FIX V59: Preserve all transaction fields for modal display
+                    id: String(t.temp_import_id || ''),
+                    payee: String(t.payee_name || t.imported_payee || t.payee || ''),
+                    payee_name: String(t.payee_name || ''),
+                    imported_payee: String(t.imported_payee || t.payee_name || ''),
                     amount:
                       typeof t.amount === 'number'
                         ? t.amount
                         : amountToInteger(t.amount || 0),
                     account: accountId,
+                    date: String(t.date || ''),
+                    notes: String(t.notes || ''),
                   })) as any
               } // Cast to TransactionEntity[]
               suggestions={agent2Suggestions}

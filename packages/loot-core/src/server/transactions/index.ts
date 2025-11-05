@@ -10,6 +10,31 @@ import { batchMessages } from '../sync';
 import * as rules from './transaction-rules';
 import * as transfer from './transfer';
 
+/**
+ * Removes temporary fields that are used during import/categorization
+ * but should not be persisted to the database.
+ * These fields are not part of the transactions table schema.
+ */
+function cleanTemporaryFields(transaction: any): any {
+  const {
+    temp_import_id,
+    __claude_confidence,
+    forceAddTransaction,
+    _account,
+    ...cleanTransaction
+  } = transaction;
+
+  // Also remove any other fields that start with underscore (metadata fields)
+  const result = { ...cleanTransaction };
+  Object.keys(result).forEach(key => {
+    if (key.startsWith('_')) {
+      delete result[key];
+    }
+  });
+
+  return result;
+}
+
 async function idsWithChildren(ids: string[]) {
   const whereIds = whereIn(ids, 'parent_id');
   const rows = await db.all<Pick<db.DbViewTransactionInternal, 'id'>>(
@@ -86,7 +111,9 @@ export async function batchUpdateTransactions({
           if (t.is_parent || account.offbudget === 1) {
             t.category = null;
           }
-          return db.insertTransaction(t);
+          // Clean temporary fields before inserting into database
+          const cleanTransaction = cleanTemporaryFields(t);
+          return db.insertTransaction(cleanTransaction);
         }),
       );
     }
