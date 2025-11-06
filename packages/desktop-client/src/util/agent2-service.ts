@@ -40,7 +40,7 @@ const AGENT_SERVER_URL = isProduction
   ? 'https://actual-agent-sr.fly.dev'
   : 'http://localhost:4000';
 
-const REQUEST_TIMEOUT = 300000; // 5 minutes (300 seconds) - prioritize precision over speed for large batches
+const REQUEST_TIMEOUT = 1260000; // 21 minutes (1260 seconds) - matches backend timeout for large batches
 
 /**
  * Rule format expected by Agent 2
@@ -200,7 +200,7 @@ export async function suggestCategories(
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         throw new Agent2Error(
-          'Request timed out after 5 minutes',
+          'Request timed out after 21 minutes',
           'timeout',
           error,
         );
